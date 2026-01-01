@@ -63,6 +63,10 @@ jobs:
         MAX_POST_LENGTH=280
         EOF
     
+    - name: Check IP and API access
+      run: |
+        python check_ip_blocking.py
+    
     - name: Test Twitter connection
       run: |
         python test_twitter_connection.py --account both
