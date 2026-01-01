@@ -101,6 +101,8 @@
    - 右上の「Sign in」をクリック
    - Xアカウントでログイン
 
+**重要**: Twitter Developer Portalは**無料**で利用できます。Basicプランで十分です。
+
 ### ステップ2: Developerアカウントの申請（初回のみ）
 
 初めてDeveloper Portalにアクセスする場合：
