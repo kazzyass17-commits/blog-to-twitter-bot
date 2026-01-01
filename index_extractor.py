@@ -29,6 +29,7 @@ class IndexExtractor:
             個別ページのURLとタイトルのリスト
         """
         urls = []
+        seen_urls = set()  # 重複チェック用
         
         # 索引ページのURL（4つの索引）
         index_urls = [
@@ -37,6 +38,9 @@ class IndexExtractor:
             "http://notesofacim.blog.fc2.com/blog-entry-433.html",  # 索引3（Day201～Day300）
             "http://notesofacim.blog.fc2.com/blog-entry-434.html",  # 索引4（Day301～Day365）
         ]
+        
+        # 索引ページ自体のURLを除外するためのセット
+        index_urls_set = set(index_urls)
         
         for index_url in index_urls:
             try:
@@ -47,39 +51,80 @@ class IndexExtractor:
                 
                 soup = BeautifulSoup(response.text, 'html.parser')
                 
-                # FC2ブログの索引ページからリンクを抽出
-                # blog-entry-で始まるリンクを探す
-                links = soup.find_all('a', href=re.compile(r'/blog-entry-\d+\.html'))
+                # より包括的なリンク抽出
+                # 1. blog-entry-で始まるリンクを探す（複数のパターンを試行）
+                patterns = [
+                    r'/blog-entry-\d+\.html',  # 標準パターン
+                    r'blog-entry-\d+\.html',   # 相対パターン
+                    r'http://notesofacim\.blog\.fc2\.com/blog-entry-\d+\.html',  # 絶対URLパターン
+                ]
                 
-                for link in links:
+                all_links = []
+                for pattern in patterns:
+                    links = soup.find_all('a', href=re.compile(pattern))
+                    all_links.extend(links)
+                
+                # 2. すべてのリンクをチェックして、blog-entry-を含むものを探す
+                if not all_links:
+                    all_page_links = soup.find_all('a', href=True)
+                    for link in all_page_links:
+                        href = link.get('href', '')
+                        if 'blog-entry-' in href and '.html' in href:
+                            all_links.append(link)
+                
+                page_url_count = 0
+                for link in all_links:
                     href = link.get('href', '')
-                    if href:
-                        # 相対URLを絶対URLに変換
-                        if not href.startswith('http'):
-                            href = urljoin(index_url, href)
-                        
-                        # タイトルを取得
-                        title = link.get_text(strip=True)
-                        if not title:
-                            title = link.get('title', '')
-                        
-                        # 重複チェック
-                        if not any(u.get('link') == href for u in urls):
-                            urls.append({
-                                'link': href,
-                                'title': title,
-                                'published_date': '',
-                                'author': '',
-                                'content': ''  # 後で取得
-                            })
+                    if not href:
+                        continue
+                    
+                    # 相対URLを絶対URLに変換
+                    if not href.startswith('http'):
+                        href = urljoin(index_url, href)
+                    
+                    # 正規化（末尾のスラッシュやパラメータを除去）
+                    href = href.split('?')[0].split('#')[0].rstrip('/')
+                    
+                    # 索引ページ自体を除外
+                    if href in index_urls_set:
+                        continue
+                    
+                    # blog-entry-を含むURLのみを対象
+                    if 'blog-entry-' not in href:
+                        continue
+                    
+                    # 重複チェック
+                    if href in seen_urls:
+                        continue
+                    
+                    seen_urls.add(href)
+                    
+                    # タイトルを取得
+                    title = link.get_text(strip=True)
+                    if not title:
+                        title = link.get('title', '')
+                    if not title:
+                        # 親要素からタイトルを取得
+                        parent = link.parent
+                        if parent:
+                            title = parent.get_text(strip=True)
+                    
+                    urls.append({
+                        'link': href,
+                        'title': title,
+                        'published_date': '',
+                        'author': '',
+                        'content': ''  # 後で取得
+                    })
+                    page_url_count += 1
                 
-                logger.info(f"索引ページから{len([u for u in urls if index_url in str(u)])}件のURLを抽出")
+                logger.info(f"この索引ページから{page_url_count}件のURLを抽出")
                 
             except Exception as e:
-                logger.error(f"索引ページ取得エラー ({index_url}): {e}")
+                logger.error(f"索引ページ取得エラー ({index_url}): {e}", exc_info=True)
                 continue
         
-        logger.info(f"合計{len(urls)}件のURLを抽出しました")
+        logger.info(f"合計{len(urls)}件のURLを抽出しました（重複除外後）")
         return urls
     
     def extract_pursahsgospel_urls(self) -> List[Dict[str, str]]:
@@ -90,6 +135,7 @@ class IndexExtractor:
             個別ページのURLとタイトルのリスト
         """
         urls = []
+        seen_urls = set()  # 重複チェック用
         
         base_url = "https://www.ameba.jp/profile/general/pursahs-gospel/"
         
@@ -109,7 +155,8 @@ class IndexExtractor:
             
             for link in all_links:
                 link_text = link.get_text(strip=True)
-                if '索引' in link_text:
+                # 「索引」を含む、または「語録」を含むリンクも索引ページの可能性がある
+                if '索引' in link_text or ('語録' in link_text and '索引' in link_text):
                     index_links.append(link)
             
             logger.info(f"{len(index_links)}個の索引ページリンクを発見")
@@ -128,52 +175,81 @@ class IndexExtractor:
                     
                     index_soup = BeautifulSoup(index_response.text, 'html.parser')
                     
-                    # 語録へのリンクを抽出（entry-で始まるリンク、または語録番号を含むリンク）
-                    entry_links = index_soup.find_all('a', href=re.compile(r'/entry-\d+\.html'))
+                    # より包括的なリンク抽出
+                    # 1. entry-で始まるリンクを探す（複数のパターンを試行）
+                    patterns = [
+                        r'/entry-\d+\.html',  # 標準パターン
+                        r'entry-\d+\.html',   # 相対パターン
+                        r'ameblo\.jp/.*?/entry-\d+\.html',  # 絶対URLパターン
+                    ]
                     
-                    # 語録番号を含むリンクも探す（語録1、語録2など）
+                    entry_links = []
+                    for pattern in patterns:
+                        links = index_soup.find_all('a', href=re.compile(pattern))
+                        entry_links.extend(links)
+                    
+                    # 2. すべてのリンクをチェックして、entry-を含むものを探す
                     if not entry_links:
-                        # より広範囲にリンクを探す
                         all_page_links = index_soup.find_all('a', href=True)
                         for link in all_page_links:
                             href = link.get('href', '')
                             link_text = link.get_text(strip=True)
-                            # entry-で始まる、または語録番号を含むリンク
-                            if '/entry-' in href or (re.search(r'語録\d+', link_text) and '/entry-' in href):
+                            # entry-を含む、または語録番号を含むリンク
+                            if '/entry-' in href or (re.search(r'語録\d+', link_text) and 'entry-' in href):
                                 entry_links.append(link)
                     
+                    page_url_count = 0
                     for link in entry_links:
                         href = link.get('href', '')
-                        if href:
-                            # 相対URLを絶対URLに変換
-                            if not href.startswith('http'):
-                                href = urljoin(index_href, href)
-                            
-                            # タイトルを取得
-                            title = link.get_text(strip=True)
-                            if not title:
-                                title = link.get('title', '')
-                            
-                            # 重複チェック
-                            if not any(u.get('link') == href for u in urls):
-                                urls.append({
-                                    'link': href,
-                                    'title': title,
-                                    'published_date': '',
-                                    'author': '',
-                                    'content': ''  # 後で取得
-                                })
+                        if not href:
+                            continue
+                        
+                        # 相対URLを絶対URLに変換
+                        if not href.startswith('http'):
+                            href = urljoin(index_href, href)
+                        
+                        # 正規化（末尾のスラッシュやパラメータを除去）
+                        href = href.split('?')[0].split('#')[0].rstrip('/')
+                        
+                        # entry-を含むURLのみを対象
+                        if '/entry-' not in href:
+                            continue
+                        
+                        # 重複チェック
+                        if href in seen_urls:
+                            continue
+                        
+                        seen_urls.add(href)
+                        
+                        # タイトルを取得
+                        title = link.get_text(strip=True)
+                        if not title:
+                            title = link.get('title', '')
+                        if not title:
+                            # 親要素からタイトルを取得
+                            parent = link.parent
+                            if parent:
+                                title = parent.get_text(strip=True)
+                        
+                        urls.append({
+                            'link': href,
+                            'title': title,
+                            'published_date': '',
+                            'author': '',
+                            'content': ''  # 後で取得
+                        })
+                        page_url_count += 1
                     
-                    logger.info(f"この索引ページから{len([u for u in urls if index_href in str(u)])}件のURLを抽出")
+                    logger.info(f"この索引ページから{page_url_count}件のURLを抽出")
                     
                 except Exception as e:
-                    logger.error(f"索引ページ取得エラー ({index_href}): {e}")
+                    logger.error(f"索引ページ取得エラー ({index_href}): {e}", exc_info=True)
                     continue
             
-            logger.info(f"合計{len(urls)}件のURLを抽出しました")
+            logger.info(f"合計{len(urls)}件のURLを抽出しました（重複除外後）")
             
         except Exception as e:
-            logger.error(f"pursahsgospel URL抽出エラー: {e}")
+            logger.error(f"pursahsgospel URL抽出エラー: {e}", exc_info=True)
         
         return urls
 
