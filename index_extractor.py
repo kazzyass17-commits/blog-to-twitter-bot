@@ -253,11 +253,65 @@ class IndexExtractor:
                         if href in index_page_urls:
                             continue
                         
+                        # リンクテキストから語録番号を抽出（柔軟なパターンマッチング）
+                        # 「語録」と数字を分けて検索し、全角数字を半角に変換
+                        def extract_goroku_number_from_text(text):
+                            """テキストから語録番号を抽出（全角数字を3桁まで検出して半角に変換）"""
+                            if not text:
+                                return None
+                            # パターン: 「語録」+ 全角数字（1-3桁）または半角数字
+                            patterns = [
+                                r'語録[　\s]*([０-９]{1,3})',  # 語録の後に全角数字（1-3桁）
+                                r'語録[　\s]*\([Logion\s]*\)[　\s]*([０-９]{1,3})',  # 語録(Logion) １
+                                r'語録[　\s]*\([　\s]*([０-９]{1,3})[　\s]*\)',  # 語録(１)
+                                r'語録[　\s]*([0-9]{1,3})',  # 語録の後に半角数字（1-3桁）
+                            ]
+                            for pattern in patterns:
+                                match = re.search(pattern, text)
+                                if match:
+                                    num_str = match.group(1)
+                                    # 全角数字を半角数字に変換（3桁まで対応）
+                                    if any(c in num_str for c in '０１２３４５６７８９'):
+                                        num_str = num_str.translate(str.maketrans('０１２３４５６７８９', '0123456789'))
+                                    try:
+                                        return int(num_str)
+                                    except ValueError:
+                                        continue
+                            return None
+                        
+                        # リンクテキストから語録番号を抽出
+                        goroku_num = extract_goroku_number_from_text(link_text)
+                        
+                        # リンクテキストに語録番号がない場合、親要素の直近のテキストを確認
+                        # （ただし、親要素全体ではなく、リンクの前後を確認）
+                        if not goroku_num:
+                            parent = link.parent
+                            if parent:
+                                # 親要素のテキストを取得するが、リンク前後のみを確認
+                                # リンクの前のテキストを取得
+                                prev_sibling = link.previous_sibling
+                                if prev_sibling and hasattr(prev_sibling, 'string'):
+                                    prev_text = str(prev_sibling.string) if prev_sibling.string else ''
+                                    goroku_num = extract_goroku_number_from_text(prev_text)
+                                
+                                # それでも見つからなければ、親要素のテキストから検索
+                                if not goroku_num:
+                                    parent_text = parent.get_text(strip=True)
+                                    # リンクテキストの位置を基準に、その前後の短い範囲を抽出
+                                    link_pos = parent_text.find(link_text)
+                                    if link_pos >= 0:
+                                        # リンクテキストの前50文字と後50文字を確認
+                                        start = max(0, link_pos - 50)
+                                        end = min(len(parent_text), link_pos + len(link_text) + 50)
+                                        context_text = parent_text[start:end]
+                                        goroku_num = extract_goroku_number_from_text(context_text)
+                        
                         # 「次へ」「戻る」「索引」などのナビゲーションリンクを除外
+                        # ただし、語録番号が抽出できた場合は語録ページとして扱う
                         link_text_lower = link_text.lower()
                         if any(nav in link_text_lower for nav in ['次へ', '戻る', '前へ', '索引', 'top', 'home']):
-                            # ただし、語録番号を含む場合は除外しない
-                            if not re.search(r'語録\d+', link_text):
+                            # 語録番号が抽出できない場合は除外
+                            if not goroku_num:
                                 continue
                         
                         # 重複チェック
@@ -266,15 +320,24 @@ class IndexExtractor:
                         
                         seen_urls.add(href)
                         
-                        # タイトルを取得（link_textを再利用）
+                        # タイトルを取得（link_textを優先）
                         title = link_text
                         if not title:
                             title = link.get('title', '')
                         if not title:
-                            # 親要素からタイトルを取得
+                            # 親要素からタイトルを取得（ただし、全体ではなくリンク周辺のみ）
                             parent = link.parent
                             if parent:
-                                title = parent.get_text(strip=True)
+                                # リンクテキストを含む部分のみを取得
+                                parent_full_text = parent.get_text(strip=True)
+                                link_pos = parent_full_text.find(link_text)
+                                if link_pos >= 0:
+                                    # リンクテキストの前後100文字のみを使用
+                                    start = max(0, link_pos - 100)
+                                    end = min(len(parent_full_text), link_pos + len(link_text) + 100)
+                                    title = parent_full_text[start:end].strip()
+                                else:
+                                    title = parent_full_text[:200].strip()  # 最初の200文字のみ
                         
                         urls.append({
                             'link': href,
