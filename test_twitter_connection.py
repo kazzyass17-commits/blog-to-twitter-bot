@@ -1,0 +1,115 @@
+"""
+X (Twitter) APIへの接続テスト
+認証情報が正しく設定されているか、APIに接続できるかを確認
+"""
+import tweepy
+import logging
+from config import Config
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+def test_twitter_connection(credentials: dict, account_name: str):
+    """
+    Twitter APIへの接続をテスト
+    
+    Args:
+        credentials: Twitter API認証情報
+        account_name: アカウント名（ログ用）
+    """
+    logger.info("=" * 60)
+    logger.info(f"{account_name} アカウントの接続テスト")
+    logger.info("=" * 60)
+    
+    # 認証情報の確認
+    logger.info("\n認証情報の確認:")
+    has_api_key = bool(credentials.get('api_key'))
+    has_api_secret = bool(credentials.get('api_secret'))
+    has_access_token = bool(credentials.get('access_token'))
+    has_access_token_secret = bool(credentials.get('access_token_secret'))
+    has_bearer_token = bool(credentials.get('bearer_token'))
+    
+    logger.info(f"  API Key: {'✓ 設定済み' if has_api_key else '✗ 未設定'}")
+    logger.info(f"  API Secret: {'✓ 設定済み' if has_api_secret else '✗ 未設定'}")
+    logger.info(f"  Access Token: {'✓ 設定済み' if has_access_token else '✗ 未設定'}")
+    logger.info(f"  Access Token Secret: {'✓ 設定済み' if has_access_token_secret else '✗ 未設定'}")
+    logger.info(f"  Bearer Token: {'✓ 設定済み' if has_bearer_token else '✗ 未設定'}")
+    
+    if not (has_api_key and has_api_secret and has_access_token and has_access_token_secret):
+        logger.error("\n✗ 認証情報が不足しています。.envファイルを確認してください。")
+        return False
+    
+    # Tweepyクライアントの作成
+    try:
+        logger.info("\nTweepyクライアントを作成中...")
+        client = tweepy.Client(
+            bearer_token=credentials.get('bearer_token'),
+            consumer_key=credentials.get('api_key'),
+            consumer_secret=credentials.get('api_secret'),
+            access_token=credentials.get('access_token'),
+            access_token_secret=credentials.get('access_token_secret'),
+            wait_on_rate_limit=True
+        )
+        logger.info("✓ クライアント作成成功")
+    except Exception as e:
+        logger.error(f"✗ クライアント作成失敗: {e}")
+        return False
+    
+    # API接続テスト（自分のアカウント情報を取得）
+    try:
+        logger.info("\nAPI接続テスト中...")
+        me = client.get_me()
+        if me and me.data:
+            logger.info(f"✓ 接続成功！")
+            logger.info(f"  ユーザー名: @{me.data.username}")
+            logger.info(f"  表示名: {me.data.name}")
+            logger.info(f"  ユーザーID: {me.data.id}")
+            return True
+        else:
+            logger.error("✗ API接続失敗: レスポンスが不正")
+            return False
+    except tweepy.Unauthorized:
+        logger.error("✗ 認証エラー: API認証情報が無効です。")
+        logger.error("  .envファイルの認証情報を確認してください。")
+        return False
+    except tweepy.TooManyRequests:
+        logger.error("✗ レート制限: リクエストが多すぎます。しばらく待ってから再試行してください。")
+        return False
+    except Exception as e:
+        logger.error(f"✗ API接続エラー: {e}")
+        return False
+
+
+def main():
+    """メイン関数"""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='X (Twitter) API接続テスト')
+    parser.add_argument('--account', choices=['365bot', 'pursahs', 'both'], default='both', 
+                       help='テストするアカウント')
+    
+    args = parser.parse_args()
+    
+    success_count = 0
+    
+    if args.account in ['365bot', 'both']:
+        logger.info("\n" + "=" * 60)
+        credentials = Config.get_twitter_credentials_365bot()
+        if test_twitter_connection(credentials, "365botGary"):
+            success_count += 1
+    
+    if args.account in ['pursahs', 'both']:
+        logger.info("\n" + "=" * 60)
+        credentials = Config.get_twitter_credentials_pursahs()
+        if test_twitter_connection(credentials, "pursahsgospel"):
+            success_count += 1
+    
+    logger.info("\n" + "=" * 60)
+    logger.info(f"接続テスト完了: {success_count} 件成功")
+    logger.info("=" * 60)
+
+
+if __name__ == "__main__":
+    main()
+
