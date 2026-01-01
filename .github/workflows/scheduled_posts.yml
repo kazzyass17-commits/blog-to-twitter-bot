@@ -69,6 +69,10 @@ jobs:
         MAX_POST_LENGTH=280
         EOF
     
+    - name: Initialize posts database from index pages
+      run: |
+        python init_posts_from_index.py
+    
     - name: Run test post output (dry-run)
       run: |
         python -c "
