@@ -5,7 +5,8 @@
 ## 前提条件
 
 - GitHubアカウントを持っていること
-- Twitter Developer PortalでAPI認証情報を取得済みであること
+- X（Twitter）アカウントを持っていること
+- Twitter Developer PortalでAPI認証情報を取得済みであること（下記手順を参照）
 
 ## ステップ1: GitHubリポジトリにアクセス
 
@@ -91,17 +92,91 @@
 3. 「**Run workflow**」ボタンをクリック
 4. 実行結果を確認
 
-## Twitter Developer Portalで認証情報を取得する方法
+## Twitter Developer Portalで認証情報を取得する方法（詳細手順）
 
-もしTwitter API認証情報をまだ取得していない場合：
+### ステップ1: Twitter Developer Portalにアクセス
 
-1. https://developer.twitter.com/ にアクセス
-2. アカウントを作成またはログイン
-3. 「Projects & Apps」→「Create Project」でプロジェクトを作成
-4. 「Keys and tokens」タブで認証情報を取得
-   - API Key and Secret
-   - Access Token and Secret
-   - Bearer Token
+1. ブラウザで https://developer.twitter.com/ にアクセス
+2. X（Twitter）アカウントでログイン
+   - 右上の「Sign in」をクリック
+   - Xアカウントでログイン
+
+### ステップ2: Developerアカウントの申請（初回のみ）
+
+初めてDeveloper Portalにアクセスする場合：
+
+1. 「Apply for a developer account」または「Apply」をクリック
+2. 利用目的を選択（例: "Making a bot" または "Exploring the API"）
+3. 必要事項を入力して申請
+4. 承認を待つ（通常、数分〜数時間）
+
+### ステップ3: プロジェクトとアプリの作成
+
+1. ログイン後、左サイドバーの「**Projects & Apps**」をクリック
+2. 「**Create Project**」または「**+ Create Project**」をクリック
+3. プロジェクト情報を入力：
+   - **Project name**: 任意の名前（例: "Blog to Twitter Bot"）
+   - **Use case**: 用途を選択（例: "Making a bot"）
+4. 「Next」をクリック
+5. アプリ名を入力（例: "blog-to-twitter-bot"）
+6. 「Complete」をクリック
+
+### ステップ4: 認証情報の取得
+
+プロジェクト作成後、認証情報を取得します：
+
+1. 作成したプロジェクトをクリック
+2. アプリ名をクリック（または「Keys and tokens」タブを開く）
+3. 「**Keys and tokens**」タブをクリック
+
+#### 4-1. API Key and Secret を取得
+
+1. 「**API Key and Secret**」セクションを探す
+2. 「**Generate**」または「**Regenerate**」をクリック
+3. 表示された値をコピー：
+   - **API Key** → これを `TWITTER_API_KEY` として保存
+   - **API Key Secret** → これを `TWITTER_API_SECRET` として保存
+   - ⚠️ **重要**: この画面を閉じると再表示できません。必ずコピーしてください
+
+#### 4-2. Access Token and Secret を取得
+
+1. 「**Access Token and Secret**」セクションを探す
+2. 「**Generate**」または「**Regenerate**」をクリック
+3. 表示された値をコピー：
+   - **Access Token** → これを `TWITTER_ACCESS_TOKEN` として保存
+   - **Access Token Secret** → これを `TWITTER_ACCESS_TOKEN_SECRET` として保存
+   - ⚠️ **重要**: この画面を閉じると再表示できません。必ずコピーしてください
+
+#### 4-3. Bearer Token を取得
+
+1. 「**Bearer Token**」セクションを探す
+2. 「**Generate**」または「**Regenerate**」をクリック
+3. 表示された値をコピー：
+   - **Bearer Token** → これを `TWITTER_BEARER_TOKEN` として保存
+   - ⚠️ **重要**: この画面を閉じると再表示できません。必ずコピーしてください
+
+### ステップ5: アプリの権限設定
+
+1. 「**Settings**」タブをクリック
+2. 「**App permissions**」セクションを確認
+3. 「**Read and Write**」または「**Read and write and Direct message**」を選択
+   - ツイートを投稿するには「Read and Write」権限が必要です
+4. 「**Save**」をクリック
+
+### ステップ6: 認証情報の保存
+
+取得した5つの認証情報を安全な場所に保存してください：
+
+- `TWITTER_API_KEY`
+- `TWITTER_API_SECRET`
+- `TWITTER_ACCESS_TOKEN`
+- `TWITTER_ACCESS_TOKEN_SECRET`
+- `TWITTER_BEARER_TOKEN`
+
+⚠️ **セキュリティ注意事項**:
+- これらの認証情報は他人に共有しないでください
+- GitHubのコードや公開リポジトリに直接書かないでください
+- GitHub Secretsにのみ保存してください
 
 ## トラブルシューティング
 
