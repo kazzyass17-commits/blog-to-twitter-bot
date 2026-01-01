@@ -62,6 +62,7 @@ def post_single_page(page_url: str, twitter_handle: str, credentials: dict):
         result = poster.post_tweet_with_link(
             text=tweet_text,
             link=post_data.get('link', page_url)
+        )
         
         if result and result.get('success'):
             logger.info(f"✓ 投稿成功: @{twitter_handle}")
