@@ -36,11 +36,12 @@ class IndexExtractor:
             "http://notesofacim.blog.fc2.com/blog-entry-431.html",  # 索引1（Day001～Day100）
             "http://notesofacim.blog.fc2.com/blog-entry-432.html",  # 索引2（Day101～Day200）
             "http://notesofacim.blog.fc2.com/blog-entry-433.html",  # 索引3（Day201～Day300）
-            "http://notesofacim.blog.fc2.com/blog-entry-434.html",  # 索引4（Day301～Day365）
+            "http://notesofacim.blog.fc2.com/blog-entry-430.html",  # 索引4（Day301～Day365）- 修正: 434ではなく430
         ]
         
-        # 索引ページ自体のURLを除外するためのセット
+        # 索引ページ自体のURLを除外するためのセット（434も除外対象に追加）
         index_urls_set = set(index_urls)
+        index_urls_set.add("http://notesofacim.blog.fc2.com/blog-entry-434.html")  # 索引ページへのリンクページも除外
         
         for index_url in index_urls:
             try:
@@ -52,24 +53,45 @@ class IndexExtractor:
                 soup = BeautifulSoup(response.text, 'html.parser')
                 
                 # より包括的なリンク抽出
-                # 1. blog-entry-で始まるリンクを探す（複数のパターンを試行）
+                # 1. すべてのリンクを取得
+                all_page_links = soup.find_all('a', href=True)
+                
+                # 2. blog-entry-を含むリンクを探す（複数の方法で）
+                all_links = []
+                for link in all_page_links:
+                    href = link.get('href', '')
+                    if not href:
+                        continue
+                    
+                    # blog-entry-を含むリンクを探す
+                    if 'blog-entry-' in href and '.html' in href:
+                        all_links.append(link)
+                
+                # 3. テキスト内にDay番号を含むリンクも探す（索引ページ特有の構造）
+                if not all_links or len(all_links) < 50:  # リンクが少ない場合は追加で探す
+                    # テーブルやリスト内のリンクを探す
+                    for element in soup.find_all(['td', 'li', 'div', 'p']):
+                        links_in_element = element.find_all('a', href=True)
+                        for link in links_in_element:
+                            href = link.get('href', '')
+                            link_text = link.get_text(strip=True)
+                            # Day番号を含む、またはblog-entry-を含むリンク
+                            if ('blog-entry-' in href and '.html' in href) or \
+                               (re.search(r'Day\d+', link_text) and 'blog-entry-' in href):
+                                if link not in all_links:
+                                    all_links.append(link)
+                
+                # 4. 正規表現パターンでも探す（念のため）
                 patterns = [
                     r'/blog-entry-\d+\.html',  # 標準パターン
                     r'blog-entry-\d+\.html',   # 相対パターン
                     r'http://notesofacim\.blog\.fc2\.com/blog-entry-\d+\.html',  # 絶対URLパターン
                 ]
                 
-                all_links = []
                 for pattern in patterns:
                     links = soup.find_all('a', href=re.compile(pattern))
-                    all_links.extend(links)
-                
-                # 2. すべてのリンクをチェックして、blog-entry-を含むものを探す
-                if not all_links:
-                    all_page_links = soup.find_all('a', href=True)
-                    for link in all_page_links:
-                        href = link.get('href', '')
-                        if 'blog-entry-' in href and '.html' in href:
+                    for link in links:
+                        if link not in all_links:
                             all_links.append(link)
                 
                 page_url_count = 0
