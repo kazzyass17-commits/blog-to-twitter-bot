@@ -89,15 +89,41 @@ def test_twitter_connection(credentials: dict, account_name: str):
         else:
             logger.error("✗ API接続失敗: レスポンスが不正")
             return False
-    except tweepy.Unauthorized:
+    except tweepy.Unauthorized as e:
         logger.error("✗ 認証エラー: API認証情報が無効です。")
+        logger.error(f"  詳細: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+            logger.error(f"  レスポンス: {e.response}")
+            if hasattr(e.response, 'text'):
+                logger.error(f"  レスポンス本文: {e.response.text[:500]}")
         logger.error("  .envファイルの認証情報を確認してください。")
         return False
-    except tweepy.TooManyRequests:
+    except tweepy.Forbidden as e:
+        logger.error("✗ アクセス拒否 (403 Forbidden): アプリの権限または状態に問題があります。")
+        logger.error(f"  詳細: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+            logger.error(f"  レスポンス: {e.response}")
+            if hasattr(e.response, 'text'):
+                logger.error(f"  レスポンス本文: {e.response.text[:500]}")
+        logger.error("\n  考えられる原因:")
+        logger.error("  1. アプリの権限が「Read and write」に設定されていない")
+        logger.error("  2. 権限変更後にAccess Tokenを再生成していない")
+        logger.error("  3. アプリがX側の承認待ち（Pending approval）")
+        logger.error("  4. アプリが停止（SUSPENDED）されている")
+        logger.error("  5. API v2へのアクセス権限がない")
+        return False
+    except tweepy.TooManyRequests as e:
         logger.error("✗ レート制限: リクエストが多すぎます。しばらく待ってから再試行してください。")
+        logger.error(f"  詳細: {e}")
         return False
     except Exception as e:
-        logger.error(f"✗ API接続エラー: {e}")
+        logger.error(f"✗ API接続エラー: {type(e).__name__}: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+            logger.error(f"  レスポンス: {e.response}")
+            if hasattr(e.response, 'text'):
+                logger.error(f"  レスポンス本文: {e.response.text[:500]}")
+        import traceback
+        logger.error(f"  トレースバック:\n{traceback.format_exc()}")
         return False
 
 
