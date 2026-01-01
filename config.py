@@ -30,6 +30,7 @@ class Config:
     TWITTER_PURSAHS_API_SECRET: Optional[str] = os.getenv("TWITTER_PURSAHS_API_SECRET")
     TWITTER_PURSAHS_ACCESS_TOKEN: Optional[str] = os.getenv("TWITTER_PURSAHS_ACCESS_TOKEN")
     TWITTER_PURSAHS_ACCESS_TOKEN_SECRET: Optional[str] = os.getenv("TWITTER_PURSAHS_ACCESS_TOKEN_SECRET")
+    TWITTER_PURSAHS_BEARER_TOKEN: Optional[str] = os.getenv("TWITTER_PURSAHS_BEARER_TOKEN")
     
     # ブログURL
     BLOG_365BOT_URL: str = os.getenv("BLOG_365BOT_URL", "http://notesofacim.blog.fc2.com/")
@@ -51,7 +52,7 @@ class Config:
                 "api_secret": cls.TWITTER_365BOT_API_SECRET or "",
                 "access_token": cls.TWITTER_365BOT_ACCESS_TOKEN or "",
                 "access_token_secret": cls.TWITTER_365BOT_ACCESS_TOKEN_SECRET or "",
-                "bearer_token": cls.TWITTER_BEARER_TOKEN,
+                "bearer_token": cls.TWITTER_365BOT_BEARER_TOKEN or cls.TWITTER_BEARER_TOKEN or "",
             }
         # デフォルト認証情報を使用
         return {
@@ -59,7 +60,7 @@ class Config:
             "api_secret": cls.TWITTER_API_SECRET,
             "access_token": cls.TWITTER_ACCESS_TOKEN,
             "access_token_secret": cls.TWITTER_ACCESS_TOKEN_SECRET,
-            "bearer_token": cls.TWITTER_BEARER_TOKEN,
+            "bearer_token": cls.TWITTER_BEARER_TOKEN or "",
         }
     
     @classmethod
@@ -71,7 +72,7 @@ class Config:
                 "api_secret": cls.TWITTER_PURSAHS_API_SECRET or "",
                 "access_token": cls.TWITTER_PURSAHS_ACCESS_TOKEN or "",
                 "access_token_secret": cls.TWITTER_PURSAHS_ACCESS_TOKEN_SECRET or "",
-                "bearer_token": cls.TWITTER_BEARER_TOKEN,
+                "bearer_token": cls.TWITTER_PURSAHS_BEARER_TOKEN or cls.TWITTER_BEARER_TOKEN or "",
             }
         # デフォルト認証情報を使用
         return {
@@ -79,7 +80,7 @@ class Config:
             "api_secret": cls.TWITTER_API_SECRET,
             "access_token": cls.TWITTER_ACCESS_TOKEN,
             "access_token_secret": cls.TWITTER_ACCESS_TOKEN_SECRET,
-            "bearer_token": cls.TWITTER_BEARER_TOKEN,
+            "bearer_token": cls.TWITTER_BEARER_TOKEN or "",
         }
 
 
