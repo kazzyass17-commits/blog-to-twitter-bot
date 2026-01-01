@@ -24,6 +24,7 @@ class Config:
     TWITTER_365BOT_API_SECRET: Optional[str] = os.getenv("TWITTER_365BOT_API_SECRET")
     TWITTER_365BOT_ACCESS_TOKEN: Optional[str] = os.getenv("TWITTER_365BOT_ACCESS_TOKEN")
     TWITTER_365BOT_ACCESS_TOKEN_SECRET: Optional[str] = os.getenv("TWITTER_365BOT_ACCESS_TOKEN_SECRET")
+    TWITTER_365BOT_BEARER_TOKEN: Optional[str] = os.getenv("TWITTER_365BOT_BEARER_TOKEN", None)
     
     # pursahsgospelアカウント用（別アカウントの場合）
     TWITTER_PURSAHS_API_KEY: Optional[str] = os.getenv("TWITTER_PURSAHS_API_KEY")
