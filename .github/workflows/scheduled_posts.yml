@@ -69,6 +69,14 @@ jobs:
         MAX_POST_LENGTH=280
         EOF
     
+    - name: Initialize posts database
+      run: |
+        python init_posts.py
+    
+    - name: Run test post output (dry-run)
+      run: |
+        python test_post.py --dry-run
+    
     - name: Download database from previous run
       uses: actions/cache@v3
       id: cache-db
