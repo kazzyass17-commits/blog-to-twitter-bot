@@ -106,9 +106,24 @@
 初めてDeveloper Portalにアクセスする場合：
 
 1. 「Apply for a developer account」または「Apply」をクリック
-2. 利用目的を選択（例: "Making a bot" または "Exploring the API"）
-3. 必要事項を入力して申請
-4. 承認を待つ（通常、数分〜数時間）
+2. 利用目的を選択：
+   - **推奨**: "Making a bot" を選択
+   - その他の選択肢: "Exploring the API" や "Hobbyist" も可能
+3. 申請フォームに必要事項を入力：
+   - **Country/region**: 国を選択
+   - **Use case details**: 詳細な利用目的を記入
+     - 例: "I want to create a bot that automatically posts blog content to Twitter. The bot will post quotes from spiritual texts at scheduled times (8 AM, 2 PM, 8 PM JST)."
+   - **Will you make Twitter content available to a government entity?**: 通常は "No" を選択
+4. 利用規約に同意して申請
+5. 承認を待つ：
+   - **即座に承認される場合**: 数分で承認されることが多い
+   - **審査が必要な場合**: 数時間〜数日かかる場合があります
+   - **承認されない場合**: より詳細な情報を求められることがあります
+
+**申請を通過しやすくするコツ**:
+- 利用目的を具体的に記述する（「ブログの内容を自動投稿するボット」など）
+- 商用利用でない場合は、その旨を明記する
+- 既存のXアカウントが正常に使用されていることを確認する
 
 ### ステップ3: プロジェクトとアプリの作成
 
