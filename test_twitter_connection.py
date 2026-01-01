@@ -56,10 +56,12 @@ def test_twitter_connection(credentials: dict, account_name: str):
         logger.error(f"✗ クライアント作成失敗: {e}")
         return False
     
-    # API接続テスト（自分のアカウント情報を取得）
-    try:
-        logger.info("\nAPI接続テスト中...")
-        me = client.get_me()
+        # API接続テスト（自分のアカウント情報を取得）
+        try:
+            logger.info("\nAPI接続テスト中...")
+            logger.info("使用するエンドポイント: GET /2/users/me")
+            # より詳細なエラー情報を取得するため、user_fieldsを指定
+            me = client.get_me(user_fields=['username', 'name', 'id'])
         if me and me.data:
             logger.info(f"✓ 接続成功！")
             logger.info(f"  ユーザー名: @{me.data.username}")
