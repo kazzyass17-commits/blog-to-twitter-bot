@@ -1,11 +1,13 @@
 """
 メインアプリケーション
-データベースから未投稿の投稿をランダムに選択してX（Twitter）に投稿
+データベースから未投稿のURLをランダムに選択して、そのページからコンテンツを取得してX（Twitter）に投稿
 """
 import logging
 import sys
+import sqlite3
 from datetime import datetime
 from database import PostDatabase
+from blog_fetcher import BlogFetcher
 from twitter_poster import TwitterPoster
 from pdf_generator import PDFGenerator
 from config import Config
@@ -23,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 def post_random_blog_post(blog_url: str, twitter_handle: str, credentials: dict, generate_pdf: bool = False):
     """
-    データベースからランダムに未投稿の投稿を選択してTwitterに投稿
+    データベースからランダムに未投稿のURLを選択して、そのページからコンテンツを取得してTwitterに投稿
     
     Args:
         blog_url: ブログのURL
@@ -39,29 +41,55 @@ def post_random_blog_post(blog_url: str, twitter_handle: str, credentials: dict,
         
         db = PostDatabase()
         
-        # 未投稿の投稿をランダムに1件取得
-        logger.info("未投稿の投稿を検索中...")
+        # 未投稿のURLをランダムに1件取得
+        logger.info("未投稿のURLを検索中...")
         post_data = db.get_random_unposted_post(blog_url, twitter_handle)
         
         if not post_data:
-            logger.warning(f"未投稿の投稿がありません: {blog_url} -> @{twitter_handle}")
+            logger.warning(f"未投稿のURLがありません: {blog_url} -> @{twitter_handle}")
             return False
         
-        logger.info(f"選択した投稿: {post_data.get('title', 'タイトルなし')}")
-        logger.info(f"投稿ID: {post_data['id']}, リンク: {post_data.get('link', '')}")
+        page_url = post_data.get('link', '')
+        if not page_url:
+            logger.warning(f"URLが取得できませんでした: post_id={post_data.get('id')}")
+            return False
+        
+        logger.info(f"選択したURL: {page_url}")
+        logger.info(f"投稿ID: {post_data['id']}")
+        
+        # ページからコンテンツを取得
+        logger.info("ページからコンテンツを取得中...")
+        fetcher = BlogFetcher(page_url)
+        page_content = fetcher.fetch_latest_post()
+        
+        if not page_content:
+            logger.warning(f"ページコンテンツを取得できませんでした: {page_url}")
+            # URLのみで投稿を試行
+            page_content = {
+                'title': post_data.get('title', ''),
+                'content': '',
+                'link': page_url,
+                'published_date': '',
+                'author': '',
+            }
+        else:
+            # データベースのタイトルを更新（取得したタイトルで上書き）
+            if page_content.get('title'):
+                conn = sqlite3.connect(db.db_path)
+                cursor = conn.cursor()
+                cursor.execute('UPDATE posts SET title = ?, updated_at = ? WHERE id = ?', 
+                             (page_content.get('title'), datetime.now().isoformat(), post_data['id']))
+                conn.commit()
+                conn.close()
+        
+        logger.info(f"取得した投稿: {page_content.get('title', 'タイトルなし')}")
         
         # PDF生成（オプション）
         if generate_pdf:
             try:
                 logger.info("PDFを生成中...")
                 pdf_gen = PDFGenerator()
-                pdf_path = pdf_gen.generate_pdf({
-                    'title': post_data.get('title', ''),
-                    'content': post_data.get('content', ''),
-                    'link': post_data.get('link', ''),
-                    'published_date': post_data.get('published_date', ''),
-                    'author': post_data.get('author', ''),
-                })
+                pdf_path = pdf_gen.generate_pdf(page_content)
                 if pdf_path:
                     logger.info(f"PDF生成成功: {pdf_path}")
             except Exception as e:
@@ -73,15 +101,15 @@ def post_random_blog_post(blog_url: str, twitter_handle: str, credentials: dict,
         
         # ツイートテキストをフォーマット
         tweet_text = poster.format_blog_post(
-            title=post_data.get('title', ''),
-            content=post_data.get('content', ''),
-            link=post_data.get('link', blog_url)
+            title=page_content.get('title', ''),
+            content=page_content.get('content', ''),
+            link=page_content.get('link', page_url)
         )
         
         # リンク付きツイートを投稿
         result = poster.post_tweet_with_link(
             text=tweet_text,
-            link=post_data.get('link', blog_url)
+            link=page_content.get('link', page_url)
         )
         
         if result and result.get('success'):

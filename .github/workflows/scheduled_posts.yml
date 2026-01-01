@@ -78,47 +78,74 @@ jobs:
         from twitter_poster import TwitterPoster
         from config import Config
         
+        from database import PostDatabase
+        
         # 365botGary用のテスト
         print('=== 365botGary テスト ===')
-        page_url = 'http://notesofacim.blog.fc2.com/blog-entry-44.html'
-        fetcher = BlogFetcher(page_url)
-        post_data = fetcher.fetch_latest_post()
+        db = PostDatabase()
+        blog_url = Config.BLOG_365BOT_URL
+        twitter_handle = Config.TWITTER_365BOT_HANDLE
         
-        if post_data:
-            credentials = Config.get_twitter_credentials_365bot()
-            poster = TwitterPoster(credentials)
-            tweet_text = poster.format_blog_post(
-                title=post_data.get('title', ''),
-                content=post_data.get('content', ''),
-                link=post_data.get('link', page_url)
-            )
-            print(f'タイトル: {post_data.get(\"title\", \"\")}')
-            print(f'リンク: {post_data.get(\"link\", \"\")}')
-            print(f'投稿予定のツイートテキスト:')
-            print(tweet_text)
-            print(f'文字数: {len(tweet_text)} 文字（リンク含む: {len(tweet_text) + 24} 文字）')
+        all_posts = db.get_all_posts(blog_url)
+        print(f'データベース内のURL数: {len(all_posts)} 件')
+        
+        if all_posts:
+            post_data = db.get_random_unposted_post(blog_url, twitter_handle)
+            if post_data:
+                page_url = post_data.get('link', '')
+                print(f'選択されたURL: {page_url}')
+                
+                # ページからコンテンツを取得
+                fetcher = BlogFetcher(page_url)
+                page_content = fetcher.fetch_latest_post()
+                
+                if page_content:
+                    credentials = Config.get_twitter_credentials_365bot()
+                    poster = TwitterPoster(credentials)
+                    tweet_text = poster.format_blog_post(
+                        title=page_content.get('title', ''),
+                        content=page_content.get('content', ''),
+                        link=page_content.get('link', page_url)
+                    )
+                    print(f'タイトル: {page_content.get(\"title\", \"\")}')
+                    print(f'リンク: {page_content.get(\"link\", \"\")}')
+                    print(f'投稿予定のツイートテキスト:')
+                    print(tweet_text)
+                    print(f'文字数: {len(tweet_text)} 文字（リンク含む: {len(tweet_text) + 24} 文字）')
         
         # pursahsgospel用のテスト
         print('\n\n=== pursahsgospel テスト ===')
-        page_url = 'https://ameblo.jp/pursahs-gospel/entry-11577213279.html'
-        fetcher = BlogFetcher(page_url)
-        post_data = fetcher.fetch_latest_post()
+        blog_url = Config.BLOG_PURSAHS_URL
+        twitter_handle = Config.TWITTER_PURSAHS_HANDLE
         
-        if post_data:
-            credentials = Config.get_twitter_credentials_pursahs()
-            poster = TwitterPoster(credentials)
-            tweet_text = poster.format_blog_post(
-                title=post_data.get('title', ''),
-                content=post_data.get('content', ''),
-                link=post_data.get('link', page_url)
-            )
-            print(f'タイトル: {post_data.get(\"title\", \"\")}')
-            print(f'リンク: {post_data.get(\"link\", \"\")}')
-            print(f'投稿予定のツイートテキスト:')
-            print(tweet_text)
-            print(f'文字数: {len(tweet_text)} 文字（リンク含む: {len(tweet_text) + 24} 文字）')
+        all_posts = db.get_all_posts(blog_url)
+        print(f'データベース内のURL数: {len(all_posts)} 件')
+        
+        if all_posts:
+            post_data = db.get_random_unposted_post(blog_url, twitter_handle)
+            if post_data:
+                page_url = post_data.get('link', '')
+                print(f'選択されたURL: {page_url}')
+                
+                # ページからコンテンツを取得
+                fetcher = BlogFetcher(page_url)
+                page_content = fetcher.fetch_latest_post()
+                
+                if page_content:
+                    credentials = Config.get_twitter_credentials_pursahs()
+                    poster = TwitterPoster(credentials)
+                    tweet_text = poster.format_blog_post(
+                        title=page_content.get('title', ''),
+                        content=page_content.get('content', ''),
+                        link=page_content.get('link', page_url)
+                    )
+                    print(f'タイトル: {page_content.get(\"title\", \"\")}')
+                    print(f'リンク: {page_content.get(\"link\", \"\")}')
+                    print(f'投稿予定のツイートテキスト:')
+                    print(tweet_text)
+                    print(f'文字数: {len(tweet_text)} 文字（リンク含む: {len(tweet_text) + 24} 文字）')
         "
     
-    - name: Run scheduled post (single page)
+    - name: Run scheduled post
       run: |
-        python post_single_page.py
+        python main.py
