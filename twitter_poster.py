@@ -111,27 +111,61 @@ class TwitterPoster:
             link: ブログリンク
         
         Returns:
-            フォーマットされたツイートテキスト
+            フォーマットされたツイートテキスト（リンクは含まない）
         """
-        # タイトルとコンテンツからツイートを作成
-        # リンクは23文字としてカウント
-        available_length = Config.MAX_POST_LENGTH - 24  # リンク + 改行
+        import re
         
-        # タイトルを優先
-        if len(title) <= available_length:
-            tweet_text = title
+        # タイトルの正規化
+        normalized_title = title
+        
+        # 365botGaryの場合: 「ACIM学習ガイド 」や「ACIM学習ノート 」を削除、「神の使い」を「神の使者」に修正
+        if 'notesofacim.blog.fc2.com' in link:
+            # 「ACIM学習ガイド 」または「ACIM学習ノート 」を削除
+            normalized_title = re.sub(r'^ACIM学習(ガイド|ノート)\s+', '', normalized_title)
+            # 「神の使い」を「神の使者」に修正
+            normalized_title = normalized_title.replace('神の使い', '神の使者')
+        
+        # pursahsgospelの場合: 「 | Pursah's Gospelのブログ」を削除
+        elif 'ameblo.jp/pursahs-gospel' in link or 'ameba.jp/profile/general/pursahs-gospel' in link:
+            # 「 | Pursah's Gospelのブログ」を削除
+            normalized_title = re.sub(r'\s*\|\s*Pursah\'?s Gospelのブログ\s*$', '', normalized_title)
+        
+        # コンテンツから不要な文字を除去（ナビゲーション要素など）
+        cleaned_content = content.strip()
+        # 「ブログトップリスト画像リスト語録」などのパターンを除去
+        cleaned_content = re.sub(r'ブログトップ.*?語録\d+', '', cleaned_content, flags=re.DOTALL)
+        cleaned_content = cleaned_content.strip()
+        
+        # フォーマット: タイトル + " " + 本文 + "\n" + URL
+        # URLは23文字としてカウント、改行1つで1文字、スペース1つで1文字
+        max_text_length = Config.MAX_POST_LENGTH - 23 - 1  # URL(23) + 改行(1)
+        
+        # タイトル + スペース + 本文 + "\n" + URL の形式で構築
+        # まず、タイトル + スペースの長さを計算
+        title_with_space = normalized_title + " "
+        available_for_content = max_text_length - len(title_with_space)
+        
+        # 本文が利用可能な長さに収まる場合
+        if len(cleaned_content) <= available_for_content:
+            # 全部引用
+            tweet_text = title_with_space + cleaned_content
         else:
-            # タイトルが長すぎる場合は短縮
-            tweet_text = title[:available_length - 3] + "..."
+            # 本文を切り詰める
+            content_preview = cleaned_content[:available_for_content]
+            # 最後の文字が途中で切れないように調整（単語境界で切る）
+            if available_for_content > 0:
+                # 最後の50文字以内に句読点があればそこで切る
+                last_part = content_preview[-50:] if len(content_preview) > 50 else content_preview
+                for punct in ['。', '.', '、', ',', '！', '!', '？', '?', '\n']:
+                    if punct in last_part:
+                        content_preview = content_preview[:content_preview.rfind(punct) + 1]
+                        break
+            
+            tweet_text = title_with_space + content_preview
         
-        # コンテンツを追加できる場合は追加
-        remaining_length = available_length - len(tweet_text) - 1  # スペース分
-        
-        if remaining_length > 20 and content:
-            content_preview = content[:remaining_length - 3]
-            tweet_text = f"{title}\n{content_preview}..."
-        else:
-            tweet_text = title
+        # 最終チェック: 280文字を超えないように（念のため）
+        if len(tweet_text) > max_text_length:
+            tweet_text = tweet_text[:max_text_length]
         
         return tweet_text
 

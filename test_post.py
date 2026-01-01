@@ -8,6 +8,7 @@ import sys
 from datetime import datetime
 from database import PostDatabase
 from twitter_poster import TwitterPoster
+from blog_fetcher import BlogFetcher
 from config import Config
 
 logging.basicConfig(
@@ -51,20 +52,44 @@ def test_dry_run(blog_url: str, twitter_handle: str):
             logger.warning("未投稿の投稿がありません。")
             return
         
+        page_url = post_data.get('link', '')
+        if not page_url:
+            logger.warning("URLが取得できませんでした")
+            return
+        
         logger.info(f"\n選択された投稿:")
         logger.info(f"  ID: {post_data['id']}")
-        logger.info(f"  タイトル: {post_data.get('title', '')}")
-        logger.info(f"  リンク: {post_data.get('link', '')}")
-        logger.info(f"  コンテンツ（最初の100文字）: {post_data.get('content', '')[:100]}...")
+        logger.info(f"  URL: {page_url}")
+        logger.info(f"  タイトル（DB）: {post_data.get('title', '')}")
+        
+        # ページからコンテンツを取得
+        logger.info("\nページからコンテンツを取得中...")
+        fetcher = BlogFetcher(page_url)
+        page_content = fetcher.fetch_latest_post()
+        
+        if not page_content:
+            logger.warning(f"ページコンテンツを取得できませんでした: {page_url}")
+            # URLのみでテスト
+            page_content = {
+                'title': post_data.get('title', ''),
+                'content': '',
+                'link': page_url,
+                'published_date': '',
+                'author': '',
+            }
+        
+        logger.info(f"  タイトル: {page_content.get('title', 'タイトルなし')}")
+        logger.info(f"  リンク: {page_content.get('link', page_url)}")
+        logger.info(f"  コンテンツ（最初の200文字）: {page_content.get('content', '')[:200]}...")
         
         # Twitter投稿テキストをフォーマット
         credentials = Config.get_twitter_credentials_365bot() if twitter_handle == Config.TWITTER_365BOT_HANDLE else Config.get_twitter_credentials_pursahs()
         poster = TwitterPoster(credentials)
         
         tweet_text = poster.format_blog_post(
-            title=post_data.get('title', ''),
-            content=post_data.get('content', ''),
-            link=post_data.get('link', blog_url)
+            title=page_content.get('title', ''),
+            content=page_content.get('content', ''),
+            link=page_content.get('link', page_url)
         )
         
         logger.info(f"\n投稿予定のツイートテキスト:")
@@ -102,21 +127,45 @@ def test_actual_post(blog_url: str, twitter_handle: str, credentials: dict):
             logger.warning("未投稿の投稿がありません。")
             return False
         
+        page_url = post_data.get('link', '')
+        if not page_url:
+            logger.warning("URLが取得できませんでした")
+            return False
+        
         logger.info(f"選択された投稿: {post_data.get('title', '')}")
+        logger.info(f"URL: {page_url}")
+        
+        # ページからコンテンツを取得
+        logger.info("ページからコンテンツを取得中...")
+        fetcher = BlogFetcher(page_url)
+        page_content = fetcher.fetch_latest_post()
+        
+        if not page_content:
+            logger.warning(f"ページコンテンツを取得できませんでした: {page_url}")
+            page_content = {
+                'title': post_data.get('title', ''),
+                'content': '',
+                'link': page_url,
+                'published_date': '',
+                'author': '',
+            }
+        
+        logger.info(f"取得した投稿: {page_content.get('title', 'タイトルなし')}")
         
         # Twitterに投稿
         poster = TwitterPoster(credentials)
         tweet_text = poster.format_blog_post(
-            title=post_data.get('title', ''),
-            content=post_data.get('content', ''),
-            link=post_data.get('link', blog_url)
+            title=page_content.get('title', ''),
+            content=page_content.get('content', ''),
+            link=page_content.get('link', page_url)
         )
         
-        logger.info(f"投稿テキスト: {tweet_text[:100]}...")
+        logger.info(f"投稿テキスト: {tweet_text}")
+        logger.info(f"文字数: {len(tweet_text)} 文字（リンク含む: {len(tweet_text) + 24} 文字）")
         
         result = poster.post_tweet_with_link(
             text=tweet_text,
-            link=post_data.get('link', blog_url)
+            link=page_content.get('link', page_url)
         )
         
         if result and result.get('success'):
