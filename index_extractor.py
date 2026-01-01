@@ -91,17 +91,11 @@ class IndexExtractor:
         """
         urls = []
         
-        # 索引ページのURL（2つの索引）
-        # 実際のURLを確認する必要がありますが、一般的なパターンで試行
         base_url = "https://www.ameba.jp/profile/general/pursahs-gospel/"
         
-        # 索引ページを探す（実際のURL構造に合わせて調整が必要）
-        index_urls = [
-            f"{base_url}",  # メインページから索引を探す
-        ]
-        
         try:
-            # まずメインページから索引ページのリンクを探す
+            # メインページから索引ページのリンクを探す
+            logger.info(f"メインページから索引を検索: {base_url}")
             response = self.session.get(base_url, timeout=30)
             response.encoding = response.apparent_encoding or 'utf-8'
             response.raise_for_status()
@@ -109,8 +103,18 @@ class IndexExtractor:
             soup = BeautifulSoup(response.text, 'html.parser')
             
             # 索引ページへのリンクを探す（「索引」を含むリンク）
-            index_links = soup.find_all('a', href=True, string=re.compile(r'索引'))
+            # テキストに「索引」を含むリンクを探す
+            all_links = soup.find_all('a', href=True)
+            index_links = []
             
+            for link in all_links:
+                link_text = link.get_text(strip=True)
+                if '索引' in link_text:
+                    index_links.append(link)
+            
+            logger.info(f"{len(index_links)}個の索引ページリンクを発見")
+            
+            # 各索引ページから個別ページのURLを抽出
             for index_link in index_links:
                 index_href = index_link.get('href', '')
                 if not index_href.startswith('http'):
@@ -124,8 +128,19 @@ class IndexExtractor:
                     
                     index_soup = BeautifulSoup(index_response.text, 'html.parser')
                     
-                    # 語録へのリンクを抽出（entry-で始まるリンク）
+                    # 語録へのリンクを抽出（entry-で始まるリンク、または語録番号を含むリンク）
                     entry_links = index_soup.find_all('a', href=re.compile(r'/entry-\d+\.html'))
+                    
+                    # 語録番号を含むリンクも探す（語録1、語録2など）
+                    if not entry_links:
+                        # より広範囲にリンクを探す
+                        all_page_links = index_soup.find_all('a', href=True)
+                        for link in all_page_links:
+                            href = link.get('href', '')
+                            link_text = link.get_text(strip=True)
+                            # entry-で始まる、または語録番号を含むリンク
+                            if '/entry-' in href or (re.search(r'語録\d+', link_text) and '/entry-' in href):
+                                entry_links.append(link)
                     
                     for link in entry_links:
                         href = link.get('href', '')
@@ -148,6 +163,8 @@ class IndexExtractor:
                                     'author': '',
                                     'content': ''  # 後で取得
                                 })
+                    
+                    logger.info(f"この索引ページから{len([u for u in urls if index_href in str(u)])}件のURLを抽出")
                     
                 except Exception as e:
                     logger.error(f"索引ページ取得エラー ({index_href}): {e}")
