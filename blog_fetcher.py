@@ -286,10 +286,23 @@ class BlogFetcher:
                 
                 title = title_elem.get_text(strip=True) if title_elem else ""
                 
-                # コンテンツ取得
-                content_elem = soup.find(['div', 'article'], class_=lambda x: x and ('entry' in x.lower() or 'content' in x.lower() or 'body' in x.lower()))
+                # コンテンツ取得（複数の方法で試す）
+                content_elem = None
+                
+                # 方法1: classにentry_bodyを含むdiv
+                content_elem = soup.find('div', class_='entry_body')
+                
+                # 方法2: classにentry_bodyを含むdiv（他の方法）
                 if not content_elem:
-                    content_elem = soup.find('div', id=lambda x: x and 'entry_body' in x.lower())
+                    for div in soup.find_all('div', class_=True):
+                        classes = ' '.join(div.get('class', []))
+                        if 'entry_body' in classes.lower():
+                            content_elem = div
+                            break
+                
+                # 方法3: classにcontentを含むdiv（idがeで始まるもの）
+                if not content_elem:
+                    content_elem = soup.find('div', class_='content', id=lambda x: x and str(x).startswith('e'))
                 
                 content = content_elem.get_text(strip=True) if content_elem else ""
                 
