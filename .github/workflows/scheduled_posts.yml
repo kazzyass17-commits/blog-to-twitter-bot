@@ -69,30 +69,56 @@ jobs:
         MAX_POST_LENGTH=280
         EOF
     
-    - name: Initialize posts database
-      run: |
-        python init_posts.py
-    
     - name: Run test post output (dry-run)
       run: |
-        python test_post.py --dry-run
+        python -c "
+        import sys
+        sys.path.insert(0, '.')
+        from blog_fetcher import BlogFetcher
+        from twitter_poster import TwitterPoster
+        from config import Config
+        
+        # 365botGary用のテスト
+        print('=== 365botGary テスト ===')
+        page_url = 'http://notesofacim.blog.fc2.com/blog-entry-44.html'
+        fetcher = BlogFetcher(page_url)
+        post_data = fetcher.fetch_latest_post()
+        
+        if post_data:
+            credentials = Config.get_twitter_credentials_365bot()
+            poster = TwitterPoster(credentials)
+            tweet_text = poster.format_blog_post(
+                title=post_data.get('title', ''),
+                content=post_data.get('content', ''),
+                link=post_data.get('link', page_url)
+            )
+            print(f'タイトル: {post_data.get(\"title\", \"\")}')
+            print(f'リンク: {post_data.get(\"link\", \"\")}')
+            print(f'投稿予定のツイートテキスト:')
+            print(tweet_text)
+            print(f'文字数: {len(tweet_text)} 文字（リンク含む: {len(tweet_text) + 24} 文字）')
+        
+        # pursahsgospel用のテスト
+        print('\n\n=== pursahsgospel テスト ===')
+        page_url = 'https://ameblo.jp/pursahs-gospel/entry-11577213279.html'
+        fetcher = BlogFetcher(page_url)
+        post_data = fetcher.fetch_latest_post()
+        
+        if post_data:
+            credentials = Config.get_twitter_credentials_pursahs()
+            poster = TwitterPoster(credentials)
+            tweet_text = poster.format_blog_post(
+                title=post_data.get('title', ''),
+                content=post_data.get('content', ''),
+                link=post_data.get('link', page_url)
+            )
+            print(f'タイトル: {post_data.get(\"title\", \"\")}')
+            print(f'リンク: {post_data.get(\"link\", \"\")}')
+            print(f'投稿予定のツイートテキスト:')
+            print(tweet_text)
+            print(f'文字数: {len(tweet_text)} 文字（リンク含む: {len(tweet_text) + 24} 文字）')
+        "
     
-    - name: Download database from previous run
-      uses: actions/cache@v3
-      id: cache-db
-      with:
-        path: posts.db
-        key: posts-db-v1
-        restore-keys: |
-          posts-db-
-    
-    - name: Run scheduled post
+    - name: Run scheduled post (single page)
       run: |
-        python main.py
-    
-    - name: Upload database for next run
-      if: always()
-      uses: actions/cache@v3
-      with:
-        path: posts.db
-        key: posts-db-v1
+        python post_single_page.py

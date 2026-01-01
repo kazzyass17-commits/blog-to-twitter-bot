@@ -255,6 +255,10 @@ class BlogFetcher:
             
             soup = BeautifulSoup(response.text, 'html.parser')
             
+            # 個別ページの場合（blog-entry-やentry-を含むURL）
+            if '/blog-entry-' in self.base_url or '/entry-' in self.base_url:
+                return self._parse_single_page(soup)
+            
             # FC2ブログの場合
             if 'fc2.com' in self.base_url:
                 return self._parse_fc2_blog(soup)
@@ -268,6 +272,79 @@ class BlogFetcher:
             
         except Exception as e:
             logger.error(f"HTML取得エラー: {e}")
+            return None
+    
+    def _parse_single_page(self, soup: BeautifulSoup) -> Optional[Dict[str, str]]:
+        """個別ページを解析"""
+        try:
+            # FC2ブログの個別ページ
+            if 'fc2.com' in self.base_url and '/blog-entry-' in self.base_url:
+                # タイトル取得
+                title_elem = soup.find(['h1', 'h2', 'h3'], class_=lambda x: x and 'title' in x.lower())
+                if not title_elem:
+                    title_elem = soup.find('title')
+                
+                title = title_elem.get_text(strip=True) if title_elem else ""
+                
+                # コンテンツ取得
+                content_elem = soup.find(['div', 'article'], class_=lambda x: x and ('entry' in x.lower() or 'content' in x.lower() or 'body' in x.lower()))
+                if not content_elem:
+                    content_elem = soup.find('div', id=lambda x: x and 'entry_body' in x.lower())
+                
+                content = content_elem.get_text(strip=True) if content_elem else ""
+                
+                return {
+                    'title': title,
+                    'content': content[:500] if content else "",
+                    'link': self.base_url,
+                    'published_date': '',
+                    'author': '',
+                }
+            
+            # Amebaブログの個別ページ
+            elif 'ameba.jp' in self.base_url and '/entry-' in self.base_url:
+                # タイトル取得
+                title_elem = soup.find(['h1', 'h2', 'h3'], class_=lambda x: x and 'title' in x.lower())
+                if not title_elem:
+                    title_elem = soup.find('title')
+                
+                title = title_elem.get_text(strip=True) if title_elem else ""
+                
+                # コンテンツ取得
+                content_elem = soup.find(['div', 'article', 'section'], class_=lambda x: x and ('entry' in x.lower() or 'content' in x.lower() or 'body' in x.lower() or 'text' in x.lower()))
+                if not content_elem:
+                    content_elem = soup.find('div', class_='skin-entryBody')
+                
+                content = content_elem.get_text(strip=True) if content_elem else ""
+                
+                return {
+                    'title': title,
+                    'content': content[:500] if content else "",
+                    'link': self.base_url,
+                    'published_date': '',
+                    'author': '',
+                }
+            
+            # その他の個別ページ
+            else:
+                title_elem = soup.find(['h1', 'title'])
+                title = title_elem.get_text(strip=True) if title_elem else ""
+                
+                content_elem = soup.find(['article', 'main', 'div'], class_=lambda x: x and ('content' in x.lower() or 'entry' in x.lower() or 'post' in x.lower()))
+                if not content_elem:
+                    content_elem = soup.find('main') or soup.find('article')
+                
+                content = content_elem.get_text(strip=True) if content_elem else ""
+                
+                return {
+                    'title': title,
+                    'content': content[:500] if content else "",
+                    'link': self.base_url,
+                    'published_date': '',
+                    'author': '',
+                }
+        except Exception as e:
+            logger.error(f"個別ページ解析エラー: {e}")
             return None
     
     def _parse_fc2_blog(self, soup: BeautifulSoup) -> Optional[Dict[str, str]]:
