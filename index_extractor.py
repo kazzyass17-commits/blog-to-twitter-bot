@@ -198,33 +198,37 @@ class IndexExtractor:
                     index_soup = BeautifulSoup(index_response.text, 'html.parser')
                     
                     # より包括的なリンク抽出
-                    # 1. entry-で始まるリンクを探す（複数のパターンを試行）
-                    patterns = [
-                        r'/entry-\d+\.html',  # 標準パターン
-                        r'entry-\d+\.html',   # 相対パターン
-                        r'ameblo\.jp/.*?/entry-\d+\.html',  # 絶対URLパターン
-                    ]
-                    
+                    # すべてのリンクをチェックして、entry-を含むものを探す
+                    all_page_links = index_soup.find_all('a', href=True)
                     entry_links = []
-                    for pattern in patterns:
-                        links = index_soup.find_all('a', href=re.compile(pattern))
-                        entry_links.extend(links)
                     
-                    # 2. すべてのリンクをチェックして、entry-を含むものを探す
-                    if not entry_links:
-                        all_page_links = index_soup.find_all('a', href=True)
-                        for link in all_page_links:
-                            href = link.get('href', '')
-                            link_text = link.get_text(strip=True)
-                            # entry-を含む、または語録番号を含むリンク
-                            if '/entry-' in href or (re.search(r'語録\d+', link_text) and 'entry-' in href):
-                                entry_links.append(link)
+                    # 索引ページ自体のURLを除外するためのセット
+                    index_page_urls = set()
+                    for il in index_links:
+                        il_href = il.get('href', '')
+                        if not il_href.startswith('http'):
+                            il_href = urljoin(base_url, il_href)
+                        index_page_urls.add(il_href.split('?')[0].split('#')[0].rstrip('/'))
+                    
+                    for link in all_page_links:
+                        href = link.get('href', '')
+                        if not href:
+                            continue
+                        
+                        link_text = link.get_text(strip=True)
+                        
+                        # entry-を含むリンクを探す
+                        if 'entry-' in href:
+                            entry_links.append(link)
                     
                     page_url_count = 0
                     for link in entry_links:
                         href = link.get('href', '')
                         if not href:
                             continue
+                        
+                        # リンクテキストを取得（ナビゲーションリンクの除外に使用）
+                        link_text = link.get_text(strip=True)
                         
                         # 相対URLを絶対URLに変換
                         if not href.startswith('http'):
@@ -233,9 +237,28 @@ class IndexExtractor:
                         # 正規化（末尾のスラッシュやパラメータを除去）
                         href = href.split('?')[0].split('#')[0].rstrip('/')
                         
+                        # s.ameblo.jpをameblo.jpに統一
+                        if 's.ameblo.jp' in href:
+                            href = href.replace('s.ameblo.jp', 'ameblo.jp')
+                        
+                        # httpをhttpsに統一
+                        if href.startswith('http://ameblo.jp'):
+                            href = href.replace('http://', 'https://')
+                        
                         # entry-を含むURLのみを対象
                         if '/entry-' not in href:
                             continue
+                        
+                        # 索引ページ自体を除外
+                        if href in index_page_urls:
+                            continue
+                        
+                        # 「次へ」「戻る」「索引」などのナビゲーションリンクを除外
+                        link_text_lower = link_text.lower()
+                        if any(nav in link_text_lower for nav in ['次へ', '戻る', '前へ', '索引', 'top', 'home']):
+                            # ただし、語録番号を含む場合は除外しない
+                            if not re.search(r'語録\d+', link_text):
+                                continue
                         
                         # 重複チェック
                         if href in seen_urls:
@@ -243,8 +266,8 @@ class IndexExtractor:
                         
                         seen_urls.add(href)
                         
-                        # タイトルを取得
-                        title = link.get_text(strip=True)
+                        # タイトルを取得（link_textを再利用）
+                        title = link_text
                         if not title:
                             title = link.get('title', '')
                         if not title:
