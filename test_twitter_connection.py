@@ -65,6 +65,26 @@ def test_twitter_connection(credentials: dict, account_name: str):
             logger.info(f"  ユーザー名: @{me.data.username}")
             logger.info(f"  表示名: {me.data.name}")
             logger.info(f"  ユーザーID: {me.data.id}")
+            
+            # 追加テスト: 最新ツイートを取得（API v2の動作確認）
+            try:
+                logger.info("\nAPI v2の動作確認中（最新ツイートを取得）...")
+                tweets = client.get_users_tweets(
+                    id=me.data.id,
+                    max_results=1,
+                    tweet_fields=['created_at', 'public_metrics', 'text']
+                )
+                if tweets and tweets.data:
+                    latest_tweet = tweets.data[0]
+                    logger.info(f"✓ 最新ツイート取得成功")
+                    logger.info(f"  ツイートID: {latest_tweet.id}")
+                    logger.info(f"  投稿日時: {latest_tweet.created_at}")
+                    logger.info(f"  テキスト: {latest_tweet.text[:50]}...")
+                else:
+                    logger.info("  ツイートがありません（新規アカウントの可能性）")
+            except Exception as e:
+                logger.warning(f"  ツイート取得テストでエラー（接続自体は成功）: {e}")
+            
             return True
         else:
             logger.error("✗ API接続失敗: レスポンスが不正")
