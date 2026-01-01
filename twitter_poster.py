@@ -132,8 +132,20 @@ class TwitterPoster:
         
         # コンテンツから不要な文字を除去（ナビゲーション要素など）
         cleaned_content = content.strip()
-        # 「ブログトップリスト画像リスト語録」などのパターンを除去
-        cleaned_content = re.sub(r'ブログトップ.*?語録\d+', '', cleaned_content, flags=re.DOTALL)
+        
+        # pursahsgospelの場合: コンテンツ内のタイトルパターンを除去
+        if 'ameblo.jp/pursahs-gospel' in link or 'ameba.jp/profile/general/pursahs-gospel' in link:
+            # 「ブログトップリスト画像リスト語録XX | Pursah's Gospelのブログ 語録XX」などのパターンを除去
+            cleaned_content = re.sub(r'ブログトップ.*?語録\d+\s*\|\s*Pursah\'?s Gospelのブログ\s*語録\d+', '', cleaned_content, flags=re.DOTALL)
+            # 「語録XX | Pursah's Gospelのブログ 語録XX」のパターンを除去
+            cleaned_content = re.sub(r'語録\d+\s*\|\s*Pursah\'?s Gospelのブログ\s*語録\d+', '', cleaned_content, flags=re.DOTALL)
+            # コンテンツの先頭の「語録XX | Pursah's Gospelのブログ 語録XX」を除去
+            cleaned_content = re.sub(r'^語録\d+\s*\|\s*Pursah\'?s Gospelのブログ\s*語録\d+', '', cleaned_content, flags=re.MULTILINE)
+            # 残っている「ブログトップリスト画像リスト語録XX」のパターンを除去
+            cleaned_content = re.sub(r'ブログトップ.*?語録\d+', '', cleaned_content, flags=re.DOTALL)
+            # コンテンツの先頭に残っている「語録XX」のみのパターンを除去（重複した語録番号）
+            cleaned_content = re.sub(r'^語録\d+\s*語録\d+', '', cleaned_content, flags=re.MULTILINE)
+        
         cleaned_content = cleaned_content.strip()
         
         # フォーマット: タイトル + " " + 本文 + "\n" + URL

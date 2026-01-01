@@ -94,7 +94,11 @@ def test_dry_run(blog_url: str, twitter_handle: str):
         
         logger.info(f"\n投稿予定のツイートテキスト:")
         logger.info(f"  {tweet_text}")
-        logger.info(f"  文字数: {len(tweet_text)} 文字（リンク含む: {len(tweet_text) + 24} 文字）")
+        logger.info(f"  文字数: {len(tweet_text)} 文字")
+        logger.info(f"\n実際の投稿形式（改行とURLを含む）:")
+        actual_tweet = f"{tweet_text}\n{page_content.get('link', page_url)}"
+        logger.info(f"  {actual_tweet}")
+        logger.info(f"  文字数: {len(tweet_text)} 文字 + 改行(1) + URL(23) = {len(tweet_text) + 24} 文字（合計280文字以内）")
         
         logger.info("\n" + "=" * 60)
         logger.info("ドライラン完了（実際には投稿されていません）")
