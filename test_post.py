@@ -219,15 +219,22 @@ def main():
             test_dry_run(Config.BLOG_PURSAHS_URL, Config.TWITTER_PURSAHS_HANDLE)
     else:
         logger.warning("実際にTwitterに投稿します。")
-        logger.warning("続行しますか？ (y/N): ", end='')
-        
-        try:
-            response = input().strip().lower()
-            if response != 'y':
-                logger.info("キャンセルしました。")
+        # GitHub Actionsなどの非対話環境では自動的に続行
+        import os
+        if os.getenv('GITHUB_ACTIONS'):
+            logger.info("GitHub Actions環境で実行中。自動的に続行します。")
+            auto_continue = True
+        else:
+            print("続行しますか？ (y/N): ", end='', flush=True)
+            try:
+                response = input().strip().lower()
+                auto_continue = (response == 'y')
+            except (KeyboardInterrupt, EOFError):
+                logger.info("\nキャンセルしました。")
                 return
-        except KeyboardInterrupt:
-            logger.info("\nキャンセルしました。")
+        
+        if not auto_continue:
+            logger.info("キャンセルしました。")
             return
         
         success_count = 0
