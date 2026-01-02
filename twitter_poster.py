@@ -70,14 +70,39 @@ class TwitterPoster:
                 logger.error("ツイート投稿失敗: レスポンスが不正")
                 return None
                 
-        except tweepy.TooManyRequests:
+        except tweepy.TooManyRequests as e:
             logger.error("レート制限に達しました。しばらく待ってから再試行してください。")
+            logger.error(f"詳細: {e}")
             return None
-        except tweepy.Unauthorized:
+        except tweepy.Unauthorized as e:
             logger.error("認証エラー: API認証情報を確認してください。")
+            logger.error(f"詳細: {e}")
+            if hasattr(e, 'response') and e.response is not None:
+                logger.error(f"レスポンス: {e.response}")
+                if hasattr(e.response, 'text'):
+                    logger.error(f"レスポンス本文: {e.response.text[:500]}")
+            return None
+        except tweepy.Forbidden as e:
+            logger.error("アクセス拒否 (403 Forbidden): 書き込み権限がありません。")
+            logger.error(f"詳細: {e}")
+            if hasattr(e, 'response') and e.response is not None:
+                logger.error(f"レスポンス: {e.response}")
+                if hasattr(e.response, 'text'):
+                    logger.error(f"レスポンス本文: {e.response.text[:500]}")
+            logger.error("\n考えられる原因:")
+            logger.error("1. アプリの権限が「Read and write」に設定されていない")
+            logger.error("2. 権限変更後にAccess Tokenを再生成していない")
+            logger.error("3. アプリがX側の承認待ち（Pending approval）")
+            logger.error("4. アプリが停止（SUSPENDED）されている")
             return None
         except Exception as e:
-            logger.error(f"ツイート投稿エラー: {e}")
+            logger.error(f"ツイート投稿エラー: {type(e).__name__}: {e}")
+            if hasattr(e, 'response') and e.response is not None:
+                logger.error(f"レスポンス: {e.response}")
+                if hasattr(e.response, 'text'):
+                    logger.error(f"レスポンス本文: {e.response.text[:500]}")
+            import traceback
+            logger.error(f"トレースバック:\n{traceback.format_exc()}")
             return None
     
     def post_tweet_with_link(self, text: str, link: str) -> Optional[Dict]:
