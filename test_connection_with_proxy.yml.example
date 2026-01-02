@@ -1,0 +1,77 @@
+# プロキシを使用する場合のワークフロー例（参考用）
+# 実際に使用する場合は、利用規約を確認してください
+
+name: Test Twitter Connection (with Proxy)
+
+on:
+  workflow_dispatch:  # 手動実行
+
+jobs:
+  test-connection:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Create .env file
+      env:
+        TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
+        TWITTER_API_SECRET: ${{ secrets.TWITTER_API_SECRET }}
+        TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
+        TWITTER_ACCESS_TOKEN_SECRET: ${{ secrets.TWITTER_ACCESS_TOKEN_SECRET }}
+        TWITTER_BEARER_TOKEN: ${{ secrets.TWITTER_BEARER_TOKEN }}
+        TWITTER_365BOT_API_KEY: ${{ secrets.TWITTER_365BOT_API_KEY }}
+        TWITTER_365BOT_API_SECRET: ${{ secrets.TWITTER_365BOT_API_SECRET }}
+        TWITTER_365BOT_ACCESS_TOKEN: ${{ secrets.TWITTER_365BOT_ACCESS_TOKEN }}
+        TWITTER_365BOT_ACCESS_TOKEN_SECRET: ${{ secrets.TWITTER_365BOT_ACCESS_TOKEN_SECRET }}
+        TWITTER_365BOT_BEARER_TOKEN: ${{ secrets.TWITTER_365BOT_BEARER_TOKEN }}
+        TWITTER_PURSAHS_API_KEY: ${{ secrets.TWITTER_PURSAHS_API_KEY }}
+        TWITTER_PURSAHS_API_SECRET: ${{ secrets.TWITTER_PURSAHS_API_SECRET }}
+        TWITTER_PURSAHS_ACCESS_TOKEN: ${{ secrets.TWITTER_PURSAHS_ACCESS_TOKEN }}
+        TWITTER_PURSAHS_ACCESS_TOKEN_SECRET: ${{ secrets.TWITTER_PURSAHS_ACCESS_TOKEN_SECRET }}
+        TWITTER_PURSAHS_BEARER_TOKEN: ${{ secrets.TWITTER_PURSAHS_BEARER_TOKEN }}
+      run: |
+        cat > .env << EOF
+        TWITTER_API_KEY=$TWITTER_API_KEY
+        TWITTER_API_SECRET=$TWITTER_API_SECRET
+        TWITTER_ACCESS_TOKEN=$TWITTER_ACCESS_TOKEN
+        TWITTER_ACCESS_TOKEN_SECRET=$TWITTER_ACCESS_TOKEN_SECRET
+        TWITTER_BEARER_TOKEN=$TWITTER_BEARER_TOKEN
+        TWITTER_365BOT_API_KEY=$TWITTER_365BOT_API_KEY
+        TWITTER_365BOT_API_SECRET=$TWITTER_365BOT_API_SECRET
+        TWITTER_365BOT_ACCESS_TOKEN=$TWITTER_365BOT_ACCESS_TOKEN
+        TWITTER_365BOT_ACCESS_TOKEN_SECRET=$TWITTER_365BOT_ACCESS_TOKEN_SECRET
+        TWITTER_365BOT_BEARER_TOKEN=$TWITTER_365BOT_BEARER_TOKEN
+        TWITTER_PURSAHS_API_KEY=$TWITTER_PURSAHS_API_KEY
+        TWITTER_PURSAHS_API_SECRET=$TWITTER_PURSAHS_API_SECRET
+        TWITTER_PURSAHS_ACCESS_TOKEN=$TWITTER_PURSAHS_ACCESS_TOKEN
+        TWITTER_PURSAHS_ACCESS_TOKEN_SECRET=$TWITTER_PURSAHS_ACCESS_TOKEN_SECRET
+        TWITTER_PURSAHS_BEARER_TOKEN=$TWITTER_PURSAHS_BEARER_TOKEN
+        BLOG_365BOT_URL=http://notesofacim.blog.fc2.com/
+        TWITTER_365BOT_HANDLE=365botGary
+        BLOG_PURSAHS_URL=https://www.ameba.jp/profile/general/pursahs-gospel/
+        TWITTER_PURSAHS_HANDLE=pursahsgospel
+        POST_INTERVAL_HOURS=24
+        MAX_POST_LENGTH=280
+        EOF
+    
+    - name: Test Twitter connection with proxy
+      env:
+        HTTP_PROXY: ${{ secrets.HTTP_PROXY }}
+        HTTPS_PROXY: ${{ secrets.HTTPS_PROXY }}
+        HTTP_PROXY_USER: ${{ secrets.HTTP_PROXY_USER }}
+        HTTP_PROXY_PASS: ${{ secrets.HTTP_PROXY_PASS }}
+      run: |
+        python test_twitter_connection.py --account both
+
