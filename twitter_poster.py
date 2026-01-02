@@ -173,24 +173,19 @@ class TwitterPoster:
         
         cleaned_content = cleaned_content.strip()
         
-        # フォーマット: タイトル + " " + 本文 + "\n" + URL
-        # URLは23文字としてカウント、改行1つで1文字、スペース1つで1文字
+        # フォーマット: 本文のみ + "\n" + URL（タイトルは含めない）
+        # URLは23文字としてカウント、改行1つで1文字
         max_text_length = Config.MAX_POST_LENGTH - 23 - 1  # URL(23) + 改行(1)
         
-        # タイトル + スペース + 本文 + "\n" + URL の形式で構築
-        # まず、タイトル + スペースの長さを計算
-        title_with_space = normalized_title + " "
-        available_for_content = max_text_length - len(title_with_space)
-        
-        # 本文が利用可能な長さに収まる場合
-        if len(cleaned_content) <= available_for_content:
+        # 本文のみを使用（タイトルは含めない）
+        if len(cleaned_content) <= max_text_length:
             # 全部引用
-            tweet_text = title_with_space + cleaned_content
+            tweet_text = cleaned_content
         else:
             # 本文を切り詰める
-            content_preview = cleaned_content[:available_for_content]
+            content_preview = cleaned_content[:max_text_length]
             # 最後の文字が途中で切れないように調整（単語境界で切る）
-            if available_for_content > 0:
+            if max_text_length > 0:
                 # 最後の50文字以内に句読点があればそこで切る
                 last_part = content_preview[-50:] if len(content_preview) > 50 else content_preview
                 for punct in ['。', '.', '、', ',', '！', '!', '？', '?', '\n']:
@@ -198,7 +193,7 @@ class TwitterPoster:
                         content_preview = content_preview[:content_preview.rfind(punct) + 1]
                         break
             
-            tweet_text = title_with_space + content_preview
+            tweet_text = content_preview
         
         # 最終チェック: 280文字を超えないように（念のため）
         if len(tweet_text) > max_text_length:
