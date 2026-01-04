@@ -13,16 +13,17 @@ logger = logging.getLogger(__name__)
 
 def create_190_char_tweet():
     """
-    190文字（URL含む）のテストツイートを作成
-    URLは23文字としてカウントされるため、本文は166文字（改行1文字含む）
-    190文字 = 本文166文字 + 改行1文字 + URL23文字 = 190文字
+    180文字（URL含む）のテストツイートを作成
+    URLは23文字としてカウントされるため、本文は156文字（改行1文字含む）
+    180文字 = 本文156文字 + 改行1文字 + URL23文字 = 180文字
+    安全のため、190文字ではなく180文字でテスト
     """
-    # 166文字のテストテキスト
+    # 156文字のテストテキスト
     # 実際の文字数カウントはXの仕様に従う
-    base_text = "これは190文字のテスト投稿です。GitHub Actionsから実行されています。文字数制限の確認のため、正確に190文字になるように調整されています。"
+    base_text = "これは180文字のテスト投稿です。GitHub Actionsから実行されています。文字数制限の確認のため、安全な180文字でテストしています。"
     
-    # 166文字になるように調整
-    target_length = 166
+    # 156文字になるように調整
+    target_length = 156
     current_length = len(base_text)
     
     if current_length < target_length:
@@ -40,7 +41,7 @@ def create_190_char_tweet():
     test_url = "https://example.com/test"
     
     # 改行1文字 + URL 23文字 = 24文字
-    # 本文166文字 + 24文字 = 190文字
+    # 本文156文字 + 24文字 = 180文字
     full_tweet = f"{test_text}\n{test_url}"
     
     logger.info(f"テストツイート文字数（実際）: {len(full_tweet)} 文字")
@@ -54,15 +55,15 @@ def create_190_char_tweet():
 
 
 def test_post_190_chars(account_name: str, credentials: dict):
-    """190文字でテスト投稿"""
+    """180文字でテスト投稿（安全のため190文字ではなく180文字）"""
     logger.info(f"\n{'='*60}")
-    logger.info(f"{account_name} アカウントで190文字テスト投稿")
+    logger.info(f"{account_name} アカウントで180文字テスト投稿")
     logger.info(f"{'='*60}\n")
     
     try:
         poster = TwitterPoster(credentials)
         
-        # 190文字のテストツイートを作成
+        # 180文字のテストツイートを作成
         test_tweet = create_190_char_tweet()
         
         logger.info(f"投稿テキスト:")
