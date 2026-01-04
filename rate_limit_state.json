@@ -1,0 +1,18 @@
+{
+  "365bot": {
+    "wait_until": null,
+    "reset_time": null,
+    "reason": null,
+    "error_time": null,
+    "api_endpoint": null,
+    "error_message": null
+  },
+  "pursahs": {
+    "wait_until": null,
+    "reset_time": null,
+    "reason": null,
+    "error_time": null,
+    "api_endpoint": null,
+    "error_message": null
+  }
+}

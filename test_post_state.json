@@ -1,0 +1,30 @@
+{
+  "current_account_index": 0,
+  "current_length_index": 2,
+  "accounts": [
+    "365botGary",
+    "pursahsgospel"
+  ],
+  "results": [
+    {
+      "length": 50,
+      "text_length": 4,
+      "twitter_counted_length": 28,
+      "actual_length": 56,
+      "success": true,
+      "tweet_id": "2007267030622450177",
+      "tweet_url": "https://twitter.com/i/web/status/2007267030622450177",
+      "timestamp": "2026-01-03T10:45:29.534868",
+      "account": "365botGary"
+    },
+    {
+      "length": 100,
+      "text_length": 30,
+      "success": false,
+      "error": "レート制限",
+      "error_detail": "429 Too Many Requests\nToo Many Requests",
+      "rate_limit_reset": "1767426336",
+      "account": "365botGary"
+    }
+  ]
+}
