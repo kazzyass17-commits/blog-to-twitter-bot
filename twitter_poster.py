@@ -22,19 +22,18 @@ class TwitterPoster:
         self.client = self._create_client()
     
     def _create_client(self):
-        """Tweepyクライアントを作成（API v1.1を使用）"""
+        """Tweepyクライアントを作成（API v2を使用）"""
         try:
-            # Twitter API v1.1を使用（api.twitter.comエンドポイント）
-            # GitHub Actionsからアクセスする際、api.x.comがCloudflareでブロックされる可能性があるため
-            # Zennの記事と同じ方法を使用: https://zenn.dev/irongeneral21/articles/zenn-x-autotweet
-            auth = tweepy.OAuth1UserHandler(
-                self.credentials.get('api_key'),
-                self.credentials.get('api_secret'),
-                self.credentials.get('access_token'),
-                self.credentials.get('access_token_secret')
+            # Twitter API v2を使用（無料プランではAPI v1.1のupdate_statusにアクセスできないため）
+            client = tweepy.Client(
+                bearer_token=self.credentials.get('bearer_token'),
+                consumer_key=self.credentials.get('api_key'),
+                consumer_secret=self.credentials.get('api_secret'),
+                access_token=self.credentials.get('access_token'),
+                access_token_secret=self.credentials.get('access_token_secret'),
+                wait_on_rate_limit=True
             )
-            api = tweepy.API(auth, wait_on_rate_limit=True)
-            return api
+            return client
         except Exception as e:
             logger.error(f"Twitterクライアント作成エラー: {e}")
             raise
@@ -56,11 +55,11 @@ class TwitterPoster:
             
             logger.info(f"ツイート投稿中: {text[:50]}...")
             
-            # ツイート投稿（API v1.1）
-            status = self.client.update_status(text)
+            # ツイート投稿（API v2）
+            response = self.client.create_tweet(text=text)
             
-            if status and status.id:
-                tweet_id = status.id
+            if response and response.data:
+                tweet_id = response.data.get('id')
                 logger.info(f"ツイート投稿成功: ID={tweet_id}")
                 return {
                     'id': tweet_id,
