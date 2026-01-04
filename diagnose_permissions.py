@@ -53,8 +53,29 @@ def diagnose_account(account_name: str, credentials: dict):
             else:
                 logger.error("   ✗ 失敗: レスポンスが不正")
                 return False
+        except tweepy.Forbidden as e:
+            logger.error(f"   ✗ 403 Forbidden: {e}")
+            if hasattr(e, 'response') and e.response is not None:
+                logger.error(f"   レスポンス: {e.response}")
+                if hasattr(e.response, 'text'):
+                    logger.error(f"   レスポンス本文: {e.response.text[:500]}")
+                if hasattr(e.response, 'headers'):
+                    logger.error(f"   レスポンスヘッダー: {dict(e.response.headers)}")
+            logger.error("\n   → 考えられる原因:")
+            logger.error("   1. GitHub ActionsのIPアドレスがX（Twitter）APIによってブロックされている")
+            logger.error("   2. アプリの権限が「Read and write」に設定されていない")
+            logger.error("   3. アプリがX側の承認待ち（Pending approval）")
+            return False
+        except tweepy.Unauthorized as e:
+            logger.error(f"   ✗ 401 Unauthorized: {e}")
+            logger.error("   → 認証情報が無効です。Access Tokenを再生成してください。")
+            return False
         except Exception as e:
-            logger.error(f"   ✗ 失敗: {e}")
+            logger.error(f"   ✗ 失敗: {type(e).__name__}: {e}")
+            if hasattr(e, 'response') and e.response is not None:
+                logger.error(f"   レスポンス: {e.response}")
+                if hasattr(e.response, 'text'):
+                    logger.error(f"   レスポンス本文: {e.response.text[:500]}")
             return False
         
         # 2. ツイート投稿テスト（書き込みテスト）
