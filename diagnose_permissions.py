@@ -24,6 +24,12 @@ def diagnose_account(account_name: str, credentials: dict):
     access_token = credentials.get('access_token')
     access_token_secret = credentials.get('access_token_secret')
     
+    logger.info(f"認証情報の確認:")
+    logger.info(f"  API Key: {'✓ 設定済み' if api_key else '✗ 未設定'}")
+    logger.info(f"  API Secret: {'✓ 設定済み' if api_secret else '✗ 未設定'}")
+    logger.info(f"  Access Token: {'✓ 設定済み' if access_token else '✗ 未設定'}")
+    logger.info(f"  Access Token Secret: {'✓ 設定済み' if access_token_secret else '✗ 未設定'}")
+    
     if not all([api_key, api_secret, access_token, access_token_secret]):
         logger.error("認証情報が不完全です")
         return False
