@@ -24,6 +24,14 @@ class TwitterPoster:
     def _create_client(self):
         """Tweepyクライアントを作成（API v1.1を使用）"""
         try:
+            import requests
+            
+            # カスタムセッションを作成（User-Agentを設定）
+            session = requests.Session()
+            session.headers.update({
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            })
+            
             # Twitter API v1.1を使用（api.twitter.comエンドポイント）
             # GitHub Actionsからアクセスする際、api.x.comがCloudflareでブロックされる可能性があるため
             auth = tweepy.OAuth1UserHandler(
@@ -32,7 +40,8 @@ class TwitterPoster:
                 self.credentials.get('access_token'),
                 self.credentials.get('access_token_secret')
             )
-            api = tweepy.API(auth, wait_on_rate_limit=True)
+            # カスタムセッションを渡す
+            api = tweepy.API(auth, wait_on_rate_limit=True, session=session)
             return api
         except Exception as e:
             logger.error(f"Twitterクライアント作成エラー: {e}")
