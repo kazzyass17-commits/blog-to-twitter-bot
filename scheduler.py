@@ -19,7 +19,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ロックファイルのパス
-LOCK_FILE = "schedule.lock"
+LOCK_FILE = "scheduler.lock"
 
 
 def run_scheduled_task():
@@ -177,9 +177,10 @@ if __name__ == "__main__":
         sys.exit(1)
     
     # 2. psutilを使って既存プロセスをチェック（利用可能な場合）
-    if check_existing_process():
-        logger.error("既存のschedule.pyプロセスが実行中です。重複実行を防ぐため終了します。")
-        sys.exit(1)
+    # 注: psutilのプロセス検出が誤検出する場合があるため、ロックファイルのみで管理
+    # if check_existing_process():
+    #     logger.error("既存のschedule.pyプロセスが実行中です。重複実行を防ぐため終了します。")
+    #     sys.exit(1)
     
     # 3. ロックファイルを作成
     if not create_lock_file():
