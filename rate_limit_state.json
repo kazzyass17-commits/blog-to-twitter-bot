@@ -1,11 +1,11 @@
 {
   "365bot": {
-    "wait_until": null,
+    "wait_until": "2026-01-06T13:10:20+00:00",
     "reset_time": null,
-    "reason": null,
-    "error_time": null,
-    "api_endpoint": null,
-    "error_message": null,
+    "reason": "429 Too Many Requests",
+    "error_time": "2026-01-06T22:05:49.378338",
+    "api_endpoint": "POST /2/tweets",
+    "error_message": "403 Forbidden: {\"detail\":\"You are not permitted to perform this action.\",\"type\":\"about:blank\",\"title\":\"Forbidden\",\"status\":403}",
     "rate_limit_limit": null,
     "rate_limit_remaining": null,
     "used_count": null
