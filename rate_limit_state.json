@@ -5,7 +5,10 @@
     "reason": null,
     "error_time": null,
     "api_endpoint": null,
-    "error_message": null
+    "error_message": null,
+    "rate_limit_limit": null,
+    "rate_limit_remaining": null,
+    "used_count": null
   },
   "pursahs": {
     "wait_until": null,
@@ -13,6 +16,9 @@
     "reason": null,
     "error_time": null,
     "api_endpoint": null,
-    "error_message": null
+    "error_message": null,
+    "rate_limit_limit": null,
+    "rate_limit_remaining": null,
+    "used_count": null
   }
 }

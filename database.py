@@ -328,7 +328,8 @@ class PostDatabase:
     def get_random_unposted_post(
         self, 
         blog_url: str, 
-        twitter_handle: str
+        twitter_handle: str,
+        filter_day_only: bool = True
     ) -> Optional[Dict]:
         """
         未投稿の投稿をランダムに1件取得
@@ -336,11 +337,13 @@ class PostDatabase:
         Args:
             blog_url: ブログURL
             twitter_handle: Twitterハンドル
+            filter_day_only: Trueの場合、Day001～Day365の投稿のみを対象とする
         
         Returns:
             投稿データ、または未投稿がない場合None
         """
         import random
+        import re
         
         cycle_number = self.get_current_cycle_number(blog_url, twitter_handle)
         
@@ -358,6 +361,25 @@ class PostDatabase:
         if not unposted_posts:
             logger.warning(f"未投稿の投稿がありません: {blog_url} -> @{twitter_handle}")
             return None
+        
+        # Day001～Day365の投稿のみをフィルタリング（365botGaryの場合）
+        if filter_day_only and 'notesofacim.blog.fc2.com' in blog_url:
+            # Day001～Day365のパターンに一致する投稿のみを選択
+            day_pattern = re.compile(r'Day(\d{3})')
+            filtered_posts = []
+            for post in unposted_posts:
+                title = post.get('title', '')
+                match = day_pattern.search(title)
+                if match:
+                    day_num = int(match.group(1))
+                    if 1 <= day_num <= 365:
+                        filtered_posts.append(post)
+            
+            if filtered_posts:
+                unposted_posts = filtered_posts
+            else:
+                logger.warning(f"Day001～Day365の未投稿がありません: {blog_url} -> @{twitter_handle}")
+                return None
         
         # ランダムに1件選択
         selected_post = random.choice(unposted_posts)

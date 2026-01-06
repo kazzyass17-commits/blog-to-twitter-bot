@@ -1,30 +1,18 @@
-# ブログ→X（Twitter）自動投稿ボット
+# ブログ→Twitter自動投稿ボット
 
-完了したブログの既存投稿を自動的にX（Twitter）に投稿するアプリケーションです。
-
-## ⚠️ 開発開始前の注意
-
-**プログラム開発を開始する前に、必ず `PREREQUISITES.md` を読んでください。**
-
-開発に必要な前提条件（アカウント、API認証情報、制限事項など）が記載されています。
+ブログからランダムに投稿を選び、X（Twitter）に自動投稿するボットです。
 
 ## 機能
 
-1. **ブログ投稿の管理**
-   - ブログから全投稿を取得してデータベースに保存
-   - 投稿履歴を管理（1巡するまで再投稿しない）
+- 2つのアカウント（365botGary、pursahsgospel）で自動投稿
+- 1日3回の自動投稿（9時、12時、15時 JST、各時間帯でランダムな分）
+- レート制限の自動管理
+- 投稿履歴の管理（サイクル機能）
 
-2. **X（Twitter）への自動投稿**
-   - `notesofacim.blog.fc2.com` → `@365botGary` に投稿
-   - `pursahs-gospel` (Ameba) → `@pursahsgospel` に投稿
-   - 未投稿の投稿をランダムに選択して投稿
+## 必要な環境
 
-3. **スケジュール実行**
-   - 1日3回（8時、14時、20時）自動実行
-   - GitHub Actionsで常時稼働可能
-
-4. **PDF生成**（NotebookLM用、オプション）
-   - 取得したコンテンツをPDF化
+- Python 3.8以上
+- Twitter API v2の認証情報（API Key、API Secret、Access Token、Access Token Secret）
 
 ## セットアップ
 
@@ -34,121 +22,111 @@
 pip install -r requirements.txt
 ```
 
-### 2. X（Twitter）API認証情報の取得
+### 2. 環境変数の設定
 
-1. [Twitter Developer Portal](https://developer.twitter.com/) にアクセス
-2. アプリケーションを作成
-3. API Key、API Secret、Access Token、Access Token Secretを取得
-4. Bearer Tokenも取得（オプション）
+`.env`ファイルを作成し、以下の認証情報を設定してください：
 
-### 3. 環境変数の設定
+```env
+# 365botGary用の認証情報
+TWITTER_API_KEY_365BOT=your_api_key
+TWITTER_API_SECRET_365BOT=your_api_secret
+TWITTER_ACCESS_TOKEN_365BOT=your_access_token
+TWITTER_ACCESS_TOKEN_SECRET_365BOT=your_access_token_secret
 
-`env.example.txt` を `.env` にコピーして、認証情報を入力してください：
+# pursahsgospel用の認証情報
+TWITTER_API_KEY_PURSAHS=your_api_key
+TWITTER_API_SECRET_PURSAHS=your_api_secret
+TWITTER_ACCESS_TOKEN_PURSAHS=your_access_token
+TWITTER_ACCESS_TOKEN_SECRET_PURSAHS=your_access_token_secret
 
-```powershell
-copy env.example.txt .env
+# ブログURL
+BLOG_365BOT_URL=http://notesofacim.blog.fc2.com
+BLOG_PURSAHS_URL=https://ameblo.jp/pursahs-gospel
 ```
 
-`.env` ファイルを編集して、Twitter API認証情報を設定します。
+参考: `env.example.txt`
 
-詳細なセットアップ手順は `SETUP_GUIDE.md` を参照してください。
+### 3. データベースの初期化
 
-### 4. 投稿データベースの初期化（初回のみ）
+初回実行時、または新しいブログURLを追加する場合：
 
 ```powershell
 python init_posts.py
 ```
 
-このスクリプトはブログから全投稿を取得してデータベースに保存します。
-初回セットアップ時に1回だけ実行してください。
-
-### 5. 実行
-
-#### 手動実行
-
-```powershell
-python main.py
-```
-
-#### スケジュール実行（ローカル）
-
-```powershell
-python schedule.py
-```
-
-#### GitHub Actionsで常時稼働
-
-詳細は `DEPLOYMENT.md` を参照してください。
-
-## 設定
-
-`.env` ファイルで以下を設定できます：
-
-- `POST_INTERVAL_HOURS`: 投稿間隔（時間単位、デフォルト: 24時間）
-- `MAX_POST_LENGTH`: 投稿の最大文字数（デフォルト: 280文字）
-
 ## 使用方法
 
-### 手動実行
+### 手動実行（テスト投稿）
 
 ```powershell
-python main.py
+$env:PYTHONIOENCODING='utf-8'
+python post_both_accounts.py
 ```
 
-### スケジュール実行
-
-`schedule.py` を使用して、定期的に実行できます：
+### 自動実行（スケジューラー）
 
 ```powershell
+$env:PYTHONIOENCODING='utf-8'
 python schedule.py
 ```
 
-## プロジェクト構造
+スケジューラーは以下のスケジュールで自動投稿します：
+- 9時00分～9時59分（ランダム）
+- 12時00分～12時59分（ランダム）
+- 15時00分～15時59分（ランダム）
 
-```
-blog-to-twitter-bot/
-├── main.py                    # メインアプリケーション
-├── init_posts.py              # 投稿データベース初期化スクリプト
-├── database.py                # データベース管理モジュール
-├── blog_fetcher.py            # ブログ取得モジュール
-├── twitter_poster.py          # Twitter投稿モジュール
-├── pdf_generator.py           # PDF生成モジュール
-├── schedule.py                # スケジューラー（ローカル実行用）
-├── config.py                  # 設定管理
-├── requirements.txt           # 依存パッケージ
-├── env.example.txt            # 環境変数テンプレート
-├── posts.db                   # 投稿データベース（自動生成）
-├── .github/
-│   └── workflows/
-│       └── scheduled_posts.yml  # GitHub Actionsワークフロー
-├── SETUP_GUIDE.md             # 詳細セットアップガイド
-├── DEPLOYMENT.md              # デプロイメントガイド
-└── README.md                  # このファイル
-```
+## 主要ファイル
 
-## 動作の仕組み
+- `post_both_accounts.py`: メインの投稿スクリプト（両アカウント対応）
+- `schedule.py`: スケジューラー（1日3回の自動投稿）
+- `twitter_poster.py`: Twitter投稿処理
+- `blog_fetcher.py`: ブログコンテンツ取得
+- `database.py`: データベース管理
+- `config.py`: 設定管理
+- `rate_limit_checker.py`: レート制限管理
+- `init_posts.py`: データベース初期化
 
-1. **初回セットアップ時**
-   - `init_posts.py`を実行してブログから全投稿を取得
-   - 投稿をデータベース（`posts.db`）に保存
+## 投稿形式
 
-2. **通常実行時（`main.py`）**
-   - データベースから未投稿の投稿をランダムに1件選択
-   - X（Twitter）に投稿
-   - 投稿履歴をデータベースに記録
+### 365botGary
+- タイトル + 本文 + URL + #ACIM
+- 最大188文字（URL含む）
 
-3. **サイクル管理**
-   - 全ての投稿が1回ずつ投稿されるまで、同じ投稿は再投稿されない
-   - 1巡（全投稿が投稿済み）が完了すると、新しいサイクルが開始される
+### pursahsgospel
+- 本文のみ + URL + #ACIM
+- 最大188文字（URL含む）
 
-4. **スケジュール実行**
-   - 1日3回（8時、14時、20時 JST）自動実行
-   - GitHub Actionsを使用して常時稼働可能
+## レート制限管理
 
-## 注意事項
+- 投稿前にレート制限状態をチェック
+- 429エラー発生時、自動的に待機時間を記録
+- 投稿成功時、レート制限状態をクリア
+- レート制限状態は`rate_limit_state.json`に保存
 
-- Twitter APIの利用規約を遵守してください
-- レート制限に注意してください（1日3回の投稿なので問題ありません）
-- ブログの利用規約を確認してください
-- 投稿データベース（`posts.db`）は定期的にバックアップすることを推奨します
+## データベース
 
+- SQLiteデータベース（`posts.db`）を使用
+- 投稿履歴を記録し、サイクル機能で重複投稿を防止
+- 各アカウント・ブログURLごとにサイクルを管理
+
+## ログ
+
+- ログはコンソールに出力されます
+- 文字化け対策のため、実行時に`PYTHONIOENCODING='utf-8'`を設定してください
+
+## トラブルシューティング
+
+### 429エラー（Too Many Requests）
+- レート制限に達しています
+- `rate_limit_state.json`を確認し、待機時間を守ってください
+
+### 403エラー（Forbidden）
+- 文字数制限を超えている可能性があります
+- 投稿テキストが188文字以内であることを確認してください
+
+### 文字化け
+- PowerShellで実行する場合、`$env:PYTHONIOENCODING='utf-8'`を設定してください
+
+## ライセンス
+
+このプロジェクトは個人利用を目的としています。

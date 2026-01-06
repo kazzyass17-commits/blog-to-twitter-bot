@@ -3,24 +3,35 @@
 """
 import logging
 import sys
+import os
 import sqlite3
 from datetime import datetime, timedelta
 from database import PostDatabase
 from blog_fetcher import BlogFetcher
 from twitter_poster import TwitterPoster
 from config import Config
-from rate_limit_checker import check_and_wait_for_account, record_rate_limit_reason
+from rate_limit_checker import check_and_wait_for_account, record_rate_limit_reason, clear_rate_limit_state
 import tweepy
+
+# Windowsでの文字化け対策（環境変数を設定）
+if sys.platform == 'win32':
+    os.environ['PYTHONIOENCODING'] = 'utf-8'
 
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('post_both_accounts.log', encoding='utf-8'),
+        logging.FileHandler('post_both_accounts.log', encoding='utf-8', mode='a'),
         logging.StreamHandler(sys.stdout)
-    ]
+    ],
+    force=True  # 既存のログ設定を上書き
 )
 logger = logging.getLogger(__name__)
+
+# ログハンドラーを取得してflushを有効化
+for handler in logger.handlers:
+    if isinstance(handler, logging.FileHandler):
+        handler.flush()
 
 
 def post_blog_post_to_account(
@@ -65,43 +76,15 @@ def post_blog_post_to_account(
         )
         
         # リンク付きツイートを投稿
-        try:
-            result = poster.post_tweet_with_link(
-                text=tweet_text,
-                link=page_content.get('link', post_data.get('link', ''))
-            )
-        except tweepy.TooManyRequests as e:
-            # 429エラーが発生した場合、原因を記録
-            logger.error(f"\n{'='*60}")
-            logger.error(f"✗ {twitter_handle}: レート制限エラーが発生しました")
-            logger.error(f"{'='*60}")
-            
-            # リセット時刻を取得
-            reset_time = None
-            wait_until = None
-            if hasattr(e, 'response') and e.response is not None:
-                if hasattr(e.response, 'headers'):
-                    rate_limit_reset = e.response.headers.get('x-rate-limit-reset')
-                    if rate_limit_reset:
-                        reset_timestamp = int(rate_limit_reset)
-                        reset_time = datetime.fromtimestamp(reset_timestamp)
-                        wait_until = reset_time + timedelta(minutes=1)
-            
-            # 原因を記録
-            record_rate_limit_reason(
-                account_key=account_key,
-                account_name=twitter_handle,
-                api_endpoint='POST /2/tweets (create_tweet)',
-                error_message=str(e),
-                reset_time=reset_time,
-                wait_until=wait_until
-            )
-            
-            logger.error(f"{twitter_handle}: 原因を記録しました。")
-            logger.error(f"{'='*60}\n")
-            return False
+        result = poster.post_tweet_with_link(
+            text=tweet_text,
+            link=page_content.get('link', post_data.get('link', ''))
+        )
         
         if result and result.get('success'):
+            # 投稿成功時はレート制限状態をクリア
+            clear_rate_limit_state(account_key)
+            
             # 投稿履歴を記録
             db = PostDatabase()
             cycle_number = db.get_current_cycle_number(blog_url, twitter_handle)
@@ -279,7 +262,18 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    finally:
+        # ログを確実に書き込む
+        import logging
+        for handler in logging.root.handlers:
+            if isinstance(handler, logging.FileHandler):
+                handler.flush()
+                handler.close()
+
+
+
 
 
 
