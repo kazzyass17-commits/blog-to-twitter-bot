@@ -5,6 +5,7 @@ import logging
 import sys
 import os
 import sqlite3
+import time
 from datetime import datetime, timedelta
 from database import PostDatabase
 from blog_fetcher import BlogFetcher
@@ -236,6 +237,11 @@ def main():
             credentials=credentials_365bot,
             account_key='365bot'
         )
+        
+        # 365botとpursahsの投稿間に10秒待機（連続投稿による一時ブロック防止）
+        if success_365bot:
+            logger.info("10秒待機中（連続投稿防止）...")
+            time.sleep(10)
         
         success_pursahs = post_blog_post_to_account(
             post_data=post_data_pursahs,
