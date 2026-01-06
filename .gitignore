@@ -55,3 +55,8 @@ output/
 .cache/
 *.cache
 
+# Lock files
+scheduler.lock
+schedule.lock
+*.lock
+
