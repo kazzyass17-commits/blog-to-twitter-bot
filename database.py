@@ -381,6 +381,20 @@ class PostDatabase:
                 logger.warning(f"Day001～Day365の未投稿がありません: {blog_url} -> @{twitter_handle}")
                 return None
         
+        # 「語録」を含む投稿のみをフィルタリング（pursahsgospelの場合）
+        if 'ameblo.jp/pursahs-gospel' in blog_url:
+            filtered_posts = []
+            for post in unposted_posts:
+                title = post.get('title', '')
+                if '語録' in title:
+                    filtered_posts.append(post)
+            
+            if filtered_posts:
+                unposted_posts = filtered_posts
+            else:
+                logger.warning(f"「語録」を含む未投稿がありません: {blog_url} -> @{twitter_handle}")
+                return None
+        
         # ランダムに1件選択
         selected_post = random.choice(unposted_posts)
         logger.info(f"投稿を選択: {selected_post.get('title', '')[:50]} (ID: {selected_post['id']})")

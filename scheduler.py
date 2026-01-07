@@ -57,9 +57,10 @@ def start_scheduler():
     logger.info("投稿時間: 9時、12時、15時（JST、各時間帯でランダムな分）")
     logger.info("=" * 60)
     
-    # 初回実行（起動時）
-    logger.info("初回実行を行います")
-    run_scheduled_task()
+    # 初回実行をスキップ（明日の朝から運用開始）
+    # logger.info("初回実行を行います")
+    # run_scheduled_task()
+    logger.info("初回実行をスキップしました。次のスケジュールから投稿を開始します。")
     
     # 1日3回のスケジュールを登録
     schedule_daily_posts()
