@@ -34,11 +34,11 @@ cursor.execute("SELECT * FROM posts WHERE blog_url LIKE '%pursahs%' OR blog_url 
 rows = cursor.fetchall()
 all_pursahs = [dict(row) for row in rows]
 
-goroku_posts = [p for p in all_pursahs if '語録' in p.get('title', '')]
+goroku_posts = [p for p in all_pursahs if '語録' in p.get('title', '') and '原書' not in p.get('title', '')]
 
 print("pursahsgospel:")
 print(f"  DB総数: {len(all_pursahs)}件")
-print(f"  投稿対象（語録）: {len(goroku_posts)}件")
+print(f"  投稿対象（語録を含む、原書除外）: {len(goroku_posts)}件")
 
 conn.close()
 

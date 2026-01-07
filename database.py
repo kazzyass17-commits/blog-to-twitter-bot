@@ -382,11 +382,12 @@ class PostDatabase:
                 return None
         
         # 「語録」を含む投稿のみをフィルタリング（pursahsgospelの場合）
+        # ※『原書などの情報』は除外
         if 'ameblo.jp/pursahs-gospel' in blog_url:
             filtered_posts = []
             for post in unposted_posts:
                 title = post.get('title', '')
-                if '語録' in title:
+                if '語録' in title and '原書' not in title:
                     filtered_posts.append(post)
             
             if filtered_posts:
