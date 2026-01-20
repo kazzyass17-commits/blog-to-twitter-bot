@@ -69,3 +69,5 @@ conn.close()
 print()
 print(f"更新完了: {updated}件")
 
+
+

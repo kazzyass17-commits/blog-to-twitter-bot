@@ -59,4 +59,3 @@ output/
 scheduler.lock
 schedule.lock
 *.lock
-

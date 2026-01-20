@@ -9,6 +9,79 @@ from config import Config
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+def _sanitize_x_headers(headers: dict) -> Dict[str, str]:
+    """
+    返ってきたレスポンスヘッダーから、調査に必要なものだけを抽出する。
+    Set-Cookie 等の不要/巨大/機微なものは保存しない。
+    """
+    if not headers:
+        return {}
+    keep = [
+        "x-transaction-id",
+        "x-access-level",
+        "x-rate-limit-limit",
+        "x-rate-limit-remaining",
+        "x-rate-limit-reset",
+        "x-app-limit-24hour-limit",
+        "x-app-limit-24hour-remaining",
+        "x-app-limit-24hour-reset",
+        "x-user-limit-24hour-limit",
+        "x-user-limit-24hour-remaining",
+        "x-user-limit-24hour-reset",
+        "api-version",
+        "cf-ray",
+        "CF-RAY",
+        "Date",
+        "Server",
+        "Content-Type",
+    ]
+    out: Dict[str, str] = {}
+    for k in keep:
+        v = headers.get(k)
+        if v is not None:
+            out[k] = str(v)
+    return out
+
+def _extract_response_details(exc: Exception) -> Dict[str, object]:
+    """
+    Tweepy例外からレスポンス情報を可能な範囲で抽出する。
+    """
+    resp = getattr(exc, "response", None)
+    headers = None
+    status_code = None
+    text = None
+    if resp is not None:
+        headers = getattr(resp, "headers", None)
+        status_code = getattr(resp, "status_code", None)
+        text = getattr(resp, "text", None)
+    headers_s = _sanitize_x_headers(dict(headers) if headers else {})
+    transaction_id = headers_s.get("x-transaction-id")
+    return {
+        "status_code": status_code,
+        "headers": headers_s,
+        "transaction_id": transaction_id,
+        "response_text": (text[:500] if isinstance(text, str) else None),
+    }
+
+def _looks_like_length_error(message: str) -> bool:
+    """
+    文字数超過/本文が長すぎる系のエラー文言をざっくり判定。
+    ※403/400でも発生し得る。ユーザー要望により「文字数由来なら待機しない」判定に使用。
+    """
+    if not message:
+        return False
+    m = message.lower()
+    patterns = [
+        "too long",
+        "tweet needs to be a bit shorter",
+        "text is too long",
+        "exceeds",
+        "character limit",
+        "over 280",
+        "too many characters",
+    ]
+    return any(p in m for p in patterns)
+
 
 class TwitterPoster:
     """X (Twitter) に投稿するクラス"""
@@ -37,6 +110,21 @@ class TwitterPoster:
                 access_token_secret=self.credentials.get('access_token_secret'),
                 wait_on_rate_limit=False  # レート制限時はエラーを返す（手動で処理）
             )
+            # TweepyのResponseは通常ヘッダーを露出しないため、内部requestをラップして直近ヘッダーを保持する
+            try:
+                original_request = getattr(client, "request", None)
+                if callable(original_request):
+                    def _wrapped_request(method, route, params=None, json=None, user_auth=False):  # type: ignore[no-redef]
+                        resp = original_request(method, route, params=params, json=json, user_auth=user_auth)
+                        try:
+                            client._last_response_headers = dict(getattr(resp, "headers", {}) or {})
+                        except Exception:
+                            client._last_response_headers = {}
+                        return resp
+                    client.request = _wrapped_request  # type: ignore[assignment]
+            except Exception:
+                # 取得できない環境/バージョンでも投稿自体は継続
+                pass
             return client
         except Exception as e:
             logger.error(f"Twitterクライアント作成エラー: {e}")
@@ -65,74 +153,62 @@ class TwitterPoster:
             if response and response.data:
                 tweet_id = response.data.get('id')
                 logger.info(f"ツイート投稿成功: ID={tweet_id}")
+                headers_s = {}
+                # 成功時もヘッダー（必要なものだけ）をログ出力し、結果に含める
+                try:
+                    raw_headers = getattr(self.client, "_last_response_headers", None) or {}
+                    headers_s = _sanitize_x_headers(raw_headers if isinstance(raw_headers, dict) else {})
+                    if headers_s:
+                        logger.info(f"レスポンスヘッダー(抜粋): {headers_s}")
+                except Exception:
+                    headers_s = {}
                 return {
                     'id': tweet_id,
                     'text': text,
-                    'success': True
+                    'success': True,
+                    'headers': headers_s,
                 }
             else:
                 logger.error("ツイート投稿失敗: レスポンスが不正")
-                return None
+                return {
+                    "success": False,
+                    "status": None,
+                    "reason": "invalid_response",
+                    "error_message": "invalid_response",
+                    "transaction_id": None,
+                    "headers": {},
+                }
                 
         except tweepy.TooManyRequests as e:
-            logger.error("レート制限に達しました。しばらく待ってから再試行してください。")
-            logger.error(f"詳細: {e}")
-            
-            # レート制限の情報を記録
+            # 429は簡潔に記録・返却（冗長な定型メッセージを削除）
+            det = _extract_response_details(e)
+            headers_s = det.get("headers") or {}
+            transaction_id = det.get("transaction_id")
+            err_msg = det.get("response_text") or str(e)
+            reason = "length_error" if _looks_like_length_error(err_msg) else "429 Too Many Requests"
             try:
                 from rate_limit_checker import record_rate_limit_reason
-                from datetime import datetime, timedelta
-                
-                # レスポンスヘッダーからレート制限情報を取得
-                rate_limit_limit = None
-                rate_limit_remaining = None
-                reset_time = None
-                
-                if hasattr(e, 'response') and e.response is not None:
-                    headers = e.response.headers if hasattr(e.response, 'headers') else {}
-                    rate_limit_limit = int(headers.get('x-rate-limit-limit', 0)) if headers.get('x-rate-limit-limit') else None
-                    rate_limit_remaining = int(headers.get('x-rate-limit-remaining', 0)) if headers.get('x-rate-limit-remaining') else None
-                    reset_timestamp = headers.get('x-rate-limit-reset')
-                    if reset_timestamp:
-                        # x-rate-limit-resetはUTCタイムスタンプ（Unixエポック秒）
-                        # UTCとして明示的に解釈
-                        from datetime import timezone
-                        reset_time = datetime.fromtimestamp(int(reset_timestamp), tz=timezone.utc)
-                    else:
-                        # reset_timeが取得できない場合は、エラーログに詳細を記録
-                        logger.error(f"警告: 429エラーが発生しましたが、x-rate-limit-resetヘッダーが取得できませんでした。")
-                        logger.error(f"  レスポンスヘッダー: {dict(headers) if headers else 'なし'}")
-                        logger.error(f"  レスポンスオブジェクト: {e.response}")
-                else:
-                    # レスポンスオブジェクトが存在しない場合
-                    logger.error(f"警告: 429エラーが発生しましたが、レスポンスオブジェクトが存在しません。")
-                    logger.error(f"  エラーオブジェクト: {e}")
-                
-                # アカウントキーとアカウント名を使用（設定されていない場合はデフォルト）
-                account_key = self.account_key or '365bot'
-                account_name = self.account_name or '365botGary'
-                
-                # 待機終了時刻を計算（reset_timeのみ使用、取得できない場合は不明）
-                if reset_time:
-                    wait_until = reset_time
-                else:
-                    # reset_timeが取得できない場合は不明
-                    wait_until = None
-                
                 record_rate_limit_reason(
-                    account_key=account_key,
-                    account_name=account_name,
+                    account_key=self.account_key or '365bot',
+                    account_name=self.account_name or '365botGary',
                     api_endpoint='POST /2/tweets',
                     error_message=str(e),
-                    reset_time=reset_time,
-                    wait_until=wait_until,
-                    rate_limit_limit=rate_limit_limit,
-                    rate_limit_remaining=rate_limit_remaining
+                    reason=reason,
+                    reset_time=None,
+                    wait_until=None,
+                    rate_limit_limit=None,
+                    rate_limit_remaining=None
                 )
-            except Exception as record_error:
-                logger.warning(f"レート制限情報の記録に失敗: {record_error}")
-            
-            return None
+            except Exception:
+                pass
+            return {
+                "success": False,
+                "status": det.get("status_code") or 429,
+                "reason": reason,
+                "error_message": err_msg,
+                "transaction_id": transaction_id,
+                "headers": headers_s,
+            }
         except tweepy.Unauthorized as e:
             logger.error("認証エラー: API認証情報を確認してください。")
             logger.error(f"詳細: {e}")
@@ -140,66 +216,44 @@ class TwitterPoster:
                 logger.error(f"レスポンス: {e.response}")
                 if hasattr(e.response, 'text'):
                     logger.error(f"レスポンス本文: {e.response.text[:500]}")
-            return None
+            det = _extract_response_details(e)
+            return {
+                "success": False,
+                "status": det.get("status_code") or 401,
+                "reason": "401 Unauthorized",
+                "error_message": det.get("response_text") or str(e),
+                "transaction_id": det.get("transaction_id"),
+                "headers": det.get("headers") or {},
+            }
         except tweepy.Forbidden as e:
-            logger.error("アクセス拒否 (403 Forbidden): 書き込み権限がありません。")
-            logger.error(f"詳細: {e}")
-            
-            # 403エラーの情報を記録
+            # 403: 定型原因メッセージは出さず、ヘッダーとtxnのみ記録して返す
+            det = _extract_response_details(e)
+            headers_s = det.get("headers") or {}
+            transaction_id = det.get("transaction_id")
+            err_msg = det.get("response_text") or str(e)
             try:
                 from rate_limit_checker import record_rate_limit_reason
-                from datetime import datetime, timedelta
-                
-                # レスポンスヘッダーからレート制限情報を取得（403でもヘッダーは返ってくる可能性がある）
-                reset_time = None
-                if hasattr(e, 'response') and e.response is not None:
-                    headers = e.response.headers if hasattr(e.response, 'headers') else {}
-                    reset_timestamp = headers.get('x-rate-limit-reset')
-                    if reset_timestamp:
-                        # x-rate-limit-resetはUTCタイムスタンプ（Unixエポック秒）
-                        # UTCとして明示的に解釈
-                        from datetime import timezone
-                        reset_time = datetime.fromtimestamp(int(reset_timestamp), tz=timezone.utc)
-                
-                account_key = self.account_key or '365bot'
-                account_name = self.account_name or '365botGary'
-                
-                # 待機終了時刻を計算（reset_timeのみ使用、取得できない場合は不明）
-                if reset_time:
-                    wait_until = reset_time
-                else:
-                    # reset_timeが取得できない場合は不明
-                    wait_until = None
-                
-                error_details = str(e)
-                if hasattr(e, 'response') and e.response is not None:
-                    if hasattr(e.response, 'text'):
-                        error_details = e.response.text[:500]
-                
                 record_rate_limit_reason(
-                    account_key=account_key,
-                    account_name=account_name,
+                    account_key=self.account_key or '365bot',
+                    account_name=self.account_name or '365botGary',
                     api_endpoint='POST /2/tweets',
-                    error_message=f"403 Forbidden: {error_details}",
+                    error_message=f"403 Forbidden: {err_msg}",
                     reset_time=None,
-                    wait_until=wait_until,
+                    wait_until=None,
+                    reason='403 Forbidden',
                     rate_limit_limit=None,
                     rate_limit_remaining=None
                 )
-            except Exception as record_error:
-                logger.warning(f"403エラー情報の記録に失敗: {record_error}")
-            
-            if hasattr(e, 'response') and e.response is not None:
-                logger.error(f"レスポンス: {e.response}")
-                if hasattr(e.response, 'text'):
-                    logger.error(f"レスポンス本文: {e.response.text[:500]}")
-            logger.error("\n考えられる原因:")
-            logger.error("1. アプリの権限が「Read and write」に設定されていない")
-            logger.error("2. 権限変更後にAccess Tokenを再生成していない")
-            logger.error("3. アプリがX側の承認待ち（Pending approval）")
-            logger.error("4. アプリが停止（SUSPENDED）されている")
-            logger.error("5. 文字数制限を超えている可能性（188文字以内に調整済み）")
-            return None
+            except Exception:
+                pass
+            return {
+                "success": False,
+                "status": det.get("status_code") or 403,
+                "reason": ("length_error" if _looks_like_length_error(err_msg) else "403 Forbidden"),
+                "error_message": err_msg,
+                "transaction_id": transaction_id,
+                "headers": headers_s,
+            }
         except Exception as e:
             logger.error(f"ツイート投稿エラー: {type(e).__name__}: {e}")
             if hasattr(e, 'response') and e.response is not None:
@@ -208,7 +262,14 @@ class TwitterPoster:
                     logger.error(f"レスポンス本文: {e.response.text[:500]}")
             import traceback
             logger.error(f"トレースバック:\n{traceback.format_exc()}")
-            return None
+            return {
+                "success": False,
+                "status": None,
+                "reason": type(e).__name__,
+                "error_message": str(e)[:500],
+                "transaction_id": None,
+                "headers": {},
+            }
     
     def post_tweet_with_link(self, text: str, link: str) -> Optional[Dict]:
         """
@@ -262,6 +323,9 @@ class TwitterPoster:
         """
         import re
         
+        # タイトルに「| パーサによるトマスの福音書」などのサブタイトルが含まれている場合は除去
+        if title:
+            title = re.sub(r"\s*\|.*", "", title)
         # タイトルの正規化
         normalized_title = title
         
@@ -282,23 +346,30 @@ class TwitterPoster:
         
         # pursahsgospelの場合: コンテンツ内のタイトルパターンを除去
         if 'ameblo.jp/pursahs-gospel' in link or 'ameba.jp/profile/general/pursahs-gospel' in link:
-            # 「ブログトップリスト画像リスト語録XX | Pursah's Gospelのブログ 語録XX」などのパターンを除去
-            cleaned_content = re.sub(r'ブログトップ.*?語録\d+\s*\|\s*Pursah\'?s Gospelのブログ\s*語録\d+', '', cleaned_content, flags=re.DOTALL)
+            # 語録番号パターン: 「語録XX」「語録 (Logion) XX」など（全角・半角数字対応）
+            goroku_pattern = r'語録(?:\s*\([^)]+\)\s*)?[０-９0-9]+'
+            
+            # 「ブログトップ...語録XX | Pursah's Gospelのブログ 語録XX」などのパターンを除去
+            cleaned_content = re.sub(rf'ブログトップ.*?{goroku_pattern}\s*\|\s*Pursah\'?s Gospelのブログ\s*{goroku_pattern}', '', cleaned_content, flags=re.DOTALL)
+            # 「ブログトップ...語録XX | パーサによるトマスの福音書 語録XX」などのパターンを除去
+            cleaned_content = re.sub(rf'ブログトップ.*?{goroku_pattern}\s*\|\s*パーサによるトマスの福音書\s*{goroku_pattern}', '', cleaned_content, flags=re.DOTALL)
             # 「語録XX | Pursah's Gospelのブログ 語録XX」のパターンを除去
-            cleaned_content = re.sub(r'語録\d+\s*\|\s*Pursah\'?s Gospelのブログ\s*語録\d+', '', cleaned_content, flags=re.DOTALL)
-            # コンテンツの先頭の「語録XX | Pursah's Gospelのブログ 語録XX」を除去
-            cleaned_content = re.sub(r'^語録\d+\s*\|\s*Pursah\'?s Gospelのブログ\s*語録\d+', '', cleaned_content, flags=re.MULTILINE)
-            # 残っている「ブログトップリスト画像リスト語録XX」のパターンを除去
-            cleaned_content = re.sub(r'ブログトップ.*?語録\d+', '', cleaned_content, flags=re.DOTALL)
-            # コンテンツの先頭に残っている「語録XX」のみのパターンを除去（重複した語録番号）
-            cleaned_content = re.sub(r'^語録\d+\s*語録\d+', '', cleaned_content, flags=re.MULTILINE)
+            cleaned_content = re.sub(rf'{goroku_pattern}\s*\|\s*Pursah\'?s Gospelのブログ\s*{goroku_pattern}', '', cleaned_content, flags=re.DOTALL)
+            # 「語録XX | パーサによるトマスの福音書 語録XX」のパターンを除去
+            cleaned_content = re.sub(rf'{goroku_pattern}\s*\|\s*パーサによるトマスの福音書\s*{goroku_pattern}', '', cleaned_content, flags=re.DOTALL)
+            # 残っている「ブログトップ...語録XX」のパターンを除去（最も広いパターン）
+            cleaned_content = re.sub(rf'ブログトップ.*?{goroku_pattern}', '', cleaned_content, flags=re.DOTALL)
+            # コンテンツの先頭に残っている重複した語録番号を除去
+            cleaned_content = re.sub(rf'^{goroku_pattern}\s*{goroku_pattern}', '', cleaned_content, flags=re.MULTILINE)
         
         cleaned_content = cleaned_content.strip()
         
         # pursahsgospelの場合: コンテンツの先頭が「語録XX」で始まる場合、その後に改行を追加
         if 'ameblo.jp/pursahs-gospel' in link or 'ameba.jp/profile/general/pursahs-gospel' in link:
-            # コンテンツの先頭が「語録XX」で始まる場合、その後に改行を追加
-            match = re.match(r'^(語録\d+)', cleaned_content)
+            # コンテンツの先頭が「語録XX」または「語録 (Logion) XX」で始まる場合、その後に改行を追加
+            # 語録番号パターン: 全角・半角数字対応
+            goroku_head_pattern = r'^(語録(?:\s*\([^)]+\)\s*)?[０-９0-9]+)'
+            match = re.match(goroku_head_pattern, cleaned_content)
             if match:
                 goroku_part = match.group(1)
                 rest_content = cleaned_content[len(goroku_part):].lstrip()

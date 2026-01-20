@@ -362,6 +362,12 @@ class PostDatabase:
             logger.warning(f"未投稿の投稿がありません: {blog_url} -> @{twitter_handle}")
             return None
         
+        # 「索引」を含む投稿は全アカウントで除外
+        unposted_posts = [p for p in unposted_posts if '索引' not in (p.get('title', '') or '')]
+        if not unposted_posts:
+            logger.warning(f"索引を除外した結果、未投稿がありません: {blog_url} -> @{twitter_handle}")
+            return None
+
         # Day001～Day365の投稿のみをフィルタリング（365botGaryの場合）
         if filter_day_only and 'notesofacim.blog.fc2.com' in blog_url:
             # Day001～Day365のパターンに一致する投稿のみを選択
@@ -383,7 +389,7 @@ class PostDatabase:
         
         # 「語録」を含む投稿のみをフィルタリング（pursahsgospelの場合）
         # ※『原書などの情報』は除外
-        if 'ameblo.jp/pursahs-gospel' in blog_url:
+        if ('pursahs-gospel' in blog_url) or (twitter_handle.lower() == 'pursahsgospel'):
             filtered_posts = []
             for post in unposted_posts:
                 title = post.get('title', '')

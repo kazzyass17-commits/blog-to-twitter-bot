@@ -5,7 +5,14 @@
 """
 import logging
 import sys
+import os
 from datetime import datetime
+
+# archive配下から直接実行しても、プロジェクトルートのモジュールをimportできるようにする
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
 from database import PostDatabase
 from twitter_poster import TwitterPoster
 from blog_fetcher import BlogFetcher
@@ -213,6 +220,7 @@ def main():
     parser.add_argument('--dry-run', action='store_true', help='ドライラン（実際に投稿しない）')
     parser.add_argument('--account', choices=['365bot', 'pursahs', 'both'], default='both', help='投稿するアカウント')
     parser.add_argument('--no-confirm', action='store_true', help='確認プロンプトをスキップして自動実行')
+    parser.add_argument('--post-id', type=int, default=None, help='指定したpost_idを投稿（失敗投稿の再投稿用）')
     
     args = parser.parse_args()
     
@@ -249,13 +257,86 @@ def main():
             logger.info("キャンセルしました。")
             return
         
+        def post_specific_id(post_id: int, blog_url: str, twitter_handle: str, credentials: dict) -> bool:
+            """指定post_idを投稿（失敗投稿の再投稿用）"""
+            import sqlite3
+            logger.info("=" * 60)
+            logger.info(f"指定post_idで投稿します: post_id={post_id} @{twitter_handle}")
+            logger.info("=" * 60)
+            
+            db = PostDatabase()
+            conn = sqlite3.connect(db.db_path)
+            cur = conn.cursor()
+            cur.execute("SELECT id, title, link FROM posts WHERE id = ?", (post_id,))
+            row = cur.fetchone()
+            conn.close()
+            
+            if not row:
+                logger.error(f"post_idが見つかりません: {post_id}")
+                return False
+            
+            post_data = {"id": row[0], "title": row[1], "link": row[2]}
+            page_url = post_data.get("link", "")
+            if not page_url:
+                logger.error("URLが取得できませんでした")
+                return False
+            
+            logger.info(f"タイトル（DB）: {post_data.get('title', '')}")
+            logger.info(f"URL: {page_url}")
+            
+            fetcher = BlogFetcher(page_url)
+            page_content = fetcher.fetch_latest_post() or {
+                'title': post_data.get('title', ''),
+                'content': '',
+                'link': page_url,
+                'published_date': '',
+                'author': '',
+            }
+            
+            # アカウントキーとアカウント名を設定（診断情報を正しく残す）
+            if twitter_handle == Config.TWITTER_365BOT_HANDLE:
+                account_key = '365bot'
+                account_name = '365botGary'
+            else:
+                account_key = 'pursahs'
+                account_name = 'pursahsgospel'
+            
+            poster = TwitterPoster(credentials, account_key=account_key, account_name=account_name)
+            tweet_text = poster.format_blog_post(
+                title=page_content.get('title', ''),
+                content=page_content.get('content', ''),
+                link=page_content.get('link', page_url)
+            )
+            
+            logger.info(f"投稿テキスト: {tweet_text}")
+            result = poster.post_tweet_with_link(text=tweet_text, link=page_url)
+            
+            if result and result.get('success'):
+                cycle_number = db.get_current_cycle_number(blog_url, twitter_handle)
+                db.record_post(
+                    post_id=post_data['id'],
+                    blog_url=blog_url,
+                    twitter_handle=twitter_handle,
+                    cycle_number=cycle_number,
+                    tweet_id=str(result.get('id', ''))
+                )
+                logger.info(f"✓ 投稿成功!")
+                logger.info(f"  ツイートID: {result.get('id')}")
+                logger.info(f"  URL: https://twitter.com/{twitter_handle}/status/{result.get('id')}")
+                return True
+            
+            logger.error("投稿失敗")
+            logger.error(f"  結果: {result}")
+            return False
+        
         success_count = 0
         
         if args.account in ['365bot', 'both']:
             logger.info("\n[365botGary]")
             credentials = Config.get_twitter_credentials_365bot()
             if credentials.get('api_key') and credentials.get('access_token'):
-                if test_actual_post(Config.BLOG_365BOT_URL, Config.TWITTER_365BOT_HANDLE, credentials):
+                ok = post_specific_id(args.post_id, Config.BLOG_365BOT_URL, Config.TWITTER_365BOT_HANDLE, credentials) if args.post_id else test_actual_post(Config.BLOG_365BOT_URL, Config.TWITTER_365BOT_HANDLE, credentials)
+                if ok:
                     success_count += 1
             else:
                 logger.error("認証情報が設定されていません")
@@ -264,7 +345,8 @@ def main():
             logger.info("\n[pursahsgospel]")
             credentials = Config.get_twitter_credentials_pursahs()
             if credentials.get('api_key') and credentials.get('access_token'):
-                if test_actual_post(Config.BLOG_PURSAHS_URL, Config.TWITTER_PURSAHS_HANDLE, credentials):
+                ok = post_specific_id(args.post_id, Config.BLOG_PURSAHS_URL, Config.TWITTER_PURSAHS_HANDLE, credentials) if args.post_id else test_actual_post(Config.BLOG_PURSAHS_URL, Config.TWITTER_PURSAHS_HANDLE, credentials)
+                if ok:
                     success_count += 1
             else:
                 logger.error("認証情報が設定されていません")

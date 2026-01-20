@@ -23,7 +23,8 @@ def load_rate_limit_state():
     """待機時間の状態を読み込む"""
     if os.path.exists(RATE_LIMIT_STATE_FILE):
         try:
-            with open(RATE_LIMIT_STATE_FILE, 'r', encoding='utf-8') as f:
+            # WindowsのOut-File等でUTF-8 BOM付きになることがあるため utf-8-sig を使用
+            with open(RATE_LIMIT_STATE_FILE, 'r', encoding='utf-8-sig') as f:
                 return json.load(f)
         except Exception as e:
             logger.warning(f"状態ファイルの読み込みエラー: {e}")
@@ -80,7 +81,17 @@ def clear_rate_limit_state(account_key: str):
         logger.info(f"{account_key} アカウント: レート制限状態をクリアしました（投稿成功のため）")
 
 
-def record_rate_limit_reason(account_key: str, account_name: str, api_endpoint: str, error_message: str, reset_time: datetime = None, wait_until: datetime = None, rate_limit_limit: int = None, rate_limit_remaining: int = None):
+def record_rate_limit_reason(
+    account_key: str,
+    account_name: str,
+    api_endpoint: str,
+    error_message: str,
+    reason: str = '429 Too Many Requests',
+    reset_time: datetime = None,
+    wait_until: datetime = None,
+    rate_limit_limit: int = None,
+    rate_limit_remaining: int = None
+):
     """
     レート制限の原因を記録する
     
@@ -104,7 +115,7 @@ def record_rate_limit_reason(account_key: str, account_name: str, api_endpoint: 
     state[account_key] = {
         'wait_until': wait_until.isoformat() if wait_until else None,
         'reset_time': reset_time.isoformat() if reset_time else None,
-        'reason': '429 Too Many Requests',
+        'reason': reason,
         'error_time': now.isoformat(),
         'api_endpoint': api_endpoint,
         'error_message': str(error_message)[:500],  # 長すぎる場合は切り詰め
@@ -147,6 +158,11 @@ def check_and_wait_for_account(account_key: str, account_name: str, skip_wait: b
     # 保存された状態を確認（create_tweetで確認すると投稿されてしまうため、保存された状態のみ確認）
     state = load_rate_limit_state()
     account_state = state.get(account_key, {})
+    reason = account_state.get('reason')
+    if reason == 'length_error':
+        # 文字数由来なら待っても改善しない（ユーザー要望）
+        logger.warning(f"{account_name} アカウント: 文字数由来のエラー（length_error）として記録されています。待機せず続行します。")
+        return True
     
     # reset_timeを優先的に確認（XのAPIから取得した実際のリセット時刻）
     reset_time_str = account_state.get('reset_time')
@@ -166,9 +182,17 @@ def check_and_wait_for_account(account_key: str, account_name: str, skip_wait: b
                 # wait_untilが過去の時刻なら、問題なし（投稿可能）
                 logger.info(f"{account_name} アカウント: 待機時刻を過ぎています。投稿可能です。")
                 return True
+            # wait_until が未来なら、その時刻まで待機 or スキップ
+            wait_seconds = (wait_until - now).total_seconds()
+            if skip_wait:
+                logger.warning(f"{account_name} アカウント: 待機中のためスキップします（残り {int(wait_seconds)} 秒）")
+                return False
+            logger.info(f"{account_name} アカウント: 待機中（{int(wait_seconds)} 秒）...")
+            time.sleep(max(0, int(wait_seconds)))
+            return True
         
-        # wait_untilもない、または未来の時刻の場合、429エラーが発生しているはずなので、スキップ
-        if account_state.get('reason') == '429 Too Many Requests' or account_state.get('error_time'):
+        # 429（レート制限）の場合のみ、reset_time不明時の保守的待機/スキップを行う
+        if reason == '429 Too Many Requests':
             logger.warning(f"{account_name} アカウント: レート制限が発生しましたが、リセット時刻が不明です。")
             logger.warning(f"  15分待っても、実際のリセット時刻が15分後ではない可能性があります。")
             logger.warning(f"  安全のため、投稿をスキップします。")
@@ -182,6 +206,9 @@ def check_and_wait_for_account(account_key: str, account_name: str, skip_wait: b
                 logger.warning(f"  再試行時に429エラーが発生した場合は、その時点でreset_timeを取得します。")
                 time.sleep(900)  # 15分 = 900秒
                 return True
+        
+        # 429以外（例: 403など）はレート制限ではないので、ここではブロックしない
+        return True
     
     if reset_time_str:
         reset_time = datetime.fromisoformat(reset_time_str)
