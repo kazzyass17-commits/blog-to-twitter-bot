@@ -371,6 +371,61 @@ def main(only_account: str = None):
             logger.info(f"{blog_name}: 追加 {saved_count} 件 / 取得 {len(posts)} 件")
             return saved_count
 
+        # 365botGaryのみ実行
+        if only_account == "365bot":
+            logger.info("\n[365botGaryのみ] 投稿を検索中...")
+            post_data_365bot = pick_post(blog_url_365bot, twitter_handle_365bot, '365bot')
+            if not post_data_365bot:
+                logger.warning(f"未投稿のURLがありません: {blog_url_365bot} -> @{twitter_handle_365bot}")
+                refresh_posts_for_blog(blog_url_365bot, "365botGary (notesofacim.blog.fc2.com)")
+                post_data_365bot = pick_post(blog_url_365bot, twitter_handle_365bot, '365bot')
+                if not post_data_365bot:
+                    logger.warning(f"再作成後も未投稿のURLがありません: {blog_url_365bot} -> @{twitter_handle_365bot}")
+                    return False
+            page_url_365bot = post_data_365bot.get('link', '')
+            if not page_url_365bot:
+                logger.warning(f"URLが取得できませんでした: post_id={post_data_365bot.get('id')}")
+                return False
+            logger.info(f"選択したURL (365botGary): {page_url_365bot}")
+            logger.info(f"投稿ID: {post_data_365bot['id']}")
+
+            logger.info(f"\n365botGary用のページからコンテンツを取得中...")
+            fetcher_365bot = BlogFetcher(page_url_365bot)
+            page_content_365bot = fetcher_365bot.fetch_latest_post()
+            if not page_content_365bot:
+                logger.warning(f"ページコンテンツを取得できませんでした: {page_url_365bot}")
+                page_content_365bot = {
+                    'title': post_data_365bot.get('title', ''),
+                    'content': '',
+                    'link': page_url_365bot,
+                    'published_date': '',
+                    'author': '',
+                }
+            else:
+                if page_content_365bot.get('title'):
+                    conn = sqlite3.connect(db.db_path)
+                    cursor = conn.cursor()
+                    cursor.execute('UPDATE posts SET title = ?, updated_at = ? WHERE id = ?',
+                                 (page_content_365bot.get('title'), datetime.now().isoformat(), post_data_365bot['id']))
+                    conn.commit()
+                    conn.close()
+
+            logger.info(f"取得した投稿 (365botGary): {page_content_365bot.get('title', 'タイトルなし')}")
+            success_365bot, _ = post_blog_post_to_account(
+                post_data=post_data_365bot,
+                page_content=page_content_365bot,
+                blog_url=blog_url_365bot,
+                twitter_handle=twitter_handle_365bot,
+                credentials=credentials_365bot,
+                account_key='365bot'
+            )
+            logger.info("\n" + "=" * 60)
+            logger.info("処理完了（365botGaryのみ）")
+            logger.info(f"365botGary: {'成功' if success_365bot else '失敗'}")
+            logger.info(f"実行時刻: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            logger.info("=" * 60)
+            return success_365bot
+
         # pursahsgospelのみ実行
         if only_account == "pursahs":
             logger.info("\n[pursahsgospelのみ] 投稿を検索中...")

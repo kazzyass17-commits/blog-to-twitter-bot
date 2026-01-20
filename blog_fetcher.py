@@ -125,6 +125,12 @@ class BlogFetcher:
                                 posts.append(post)
                         
                         if posts:
+                            # FC2でRSSが索引だけの場合はアーカイブを試す
+                            if 'fc2.com' in self.base_url:
+                                non_index = [p for p in posts if '索引' not in (p.get('title') or '')]
+                                if not non_index:
+                                    logger.info("RSSが索引のみのため、アーカイブから再取得を試行")
+                                    break
                             logger.info(f"RSSから{len(posts)}件の投稿を取得")
                             return posts
                 except Exception as e:
@@ -133,13 +139,57 @@ class BlogFetcher:
             
             # RSSが取得できない場合は、HTMLから複数ページを取得
             logger.info("HTMLから投稿を取得します（制限: 最新数件のみ）")
-            html_posts = self._fetch_multiple_from_html(max_posts)
+            html_posts = []
+            if 'fc2.com' in self.base_url:
+                html_posts = self._fetch_fc2_archive_posts(max_posts)
+            if not html_posts:
+                html_posts = self._fetch_multiple_from_html(max_posts)
             if html_posts:
                 return html_posts
             
         except Exception as e:
             logger.error(f"全投稿取得エラー: {e}")
         
+        return posts
+
+    def _fetch_fc2_archive_posts(self, max_posts: int = 200) -> List[Dict[str, str]]:
+        """FC2のアーカイブ一覧から投稿リンクを取得"""
+        posts = []
+        try:
+            archive_url = urljoin(self.base_url, "archives.html")
+            logger.info(f"FC2アーカイブ取得を試行: {archive_url}")
+            response = self.session.get(archive_url, timeout=30)
+            response.encoding = response.apparent_encoding or 'utf-8'
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.text, 'html.parser')
+            seen = set()
+            for a in soup.find_all('a', href=True):
+                href = a.get('href', '')
+                if 'blog-entry-' not in href:
+                    continue
+                if not href.endswith('.html'):
+                    continue
+                link = href if href.startswith('http') else urljoin(self.base_url, href)
+                if link in seen:
+                    continue
+                seen.add(link)
+                title = a.get_text(strip=True)
+                if not title:
+                    title = link
+                posts.append({
+                    'title': title,
+                    'content': '',
+                    'link': link,
+                    'published_date': '',
+                    'author': '',
+                })
+                if len(posts) >= max_posts:
+                    break
+            if posts:
+                logger.info(f"FC2アーカイブから{len(posts)}件の投稿を取得")
+        except Exception as e:
+            logger.error(f"FC2アーカイブ取得エラー: {e}")
         return posts
     
     def _fetch_multiple_from_html(self, max_posts: int = 20) -> List[Dict[str, str]]:
