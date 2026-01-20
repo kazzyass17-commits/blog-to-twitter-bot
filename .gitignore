@@ -1,4 +1,4 @@
-﻿# Environment
+# Environment
 .env
 .env.local
 *.env
@@ -43,16 +43,13 @@ Thumbs.db
 *.log
 logs/
 
-# PDF output
+# PDF出力
 pdfs/
 output/
 
 # Database
 *.db
 *.sqlite
-*.db-wal
-*.db-shm
-!posts.db
 
 # Cache
 .cache/
