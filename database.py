@@ -186,19 +186,15 @@ class PostDatabase:
         now = datetime.now().isoformat()
         
         # 前のサイクルの投稿履歴を削除（投稿済みフラグを解除）
-        # ただし、本日投稿したものは除外（重複投稿防止）
         prev_cycle = cycle_number - 1
         if prev_cycle > 0:
-            from datetime import datetime, date
-            today = date.today().isoformat()
             cursor.execute('''
                 DELETE FROM post_history 
                 WHERE blog_url = ? AND twitter_handle = ? AND cycle_number = ?
-                AND date(posted_at) < ?
-            ''', (blog_url, twitter_handle, prev_cycle, today))
+            ''', (blog_url, twitter_handle, prev_cycle))
             deleted_count = cursor.rowcount
             if deleted_count > 0:
-                logger.info(f"前のサイクル#{prev_cycle}の投稿履歴を削除（投稿済みフラグ解除、本日分は除外）: {deleted_count}件")
+                logger.info(f"前のサイクル#{prev_cycle}の投稿履歴を削除（投稿済みフラグ解除）: {deleted_count}件")
         
         cursor.execute('''
             INSERT INTO cycles (blog_url, twitter_handle, cycle_number, started_at)
