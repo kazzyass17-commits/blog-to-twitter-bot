@@ -170,7 +170,7 @@ class PostDatabase:
     
     def start_new_cycle(self, blog_url: str, twitter_handle: str) -> int:
         """
-        新しいサイクルを開始
+        新しいサイクルを開始（前のサイクルの投稿履歴を削除して投稿済みフラグを解除）
         
         Args:
             blog_url: ブログURL
@@ -184,6 +184,17 @@ class PostDatabase:
         
         cycle_number = self.get_current_cycle_number(blog_url, twitter_handle) + 1
         now = datetime.now().isoformat()
+        
+        # 前のサイクルの投稿履歴を削除（投稿済みフラグを解除）
+        prev_cycle = cycle_number - 1
+        if prev_cycle > 0:
+            cursor.execute('''
+                DELETE FROM post_history 
+                WHERE blog_url = ? AND twitter_handle = ? AND cycle_number = ?
+            ''', (blog_url, twitter_handle, prev_cycle))
+            deleted_count = cursor.rowcount
+            if deleted_count > 0:
+                logger.info(f"前のサイクル#{prev_cycle}の投稿履歴を削除（投稿済みフラグ解除）: {deleted_count}件")
         
         cursor.execute('''
             INSERT INTO cycles (blog_url, twitter_handle, cycle_number, started_at)
