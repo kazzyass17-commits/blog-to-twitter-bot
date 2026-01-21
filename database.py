@@ -239,6 +239,17 @@ class PostDatabase:
         
         posted_ids = [row[0] for row in cursor.fetchall()]
         
+        # 本日投稿した投稿IDも除外（サイクル番号に関係なく、重複投稿防止）
+        from datetime import date
+        today = date.today().isoformat()
+        cursor.execute('''
+            SELECT DISTINCT post_id FROM post_history 
+            WHERE blog_url = ? AND twitter_handle = ? AND date(posted_at) = ?
+        ''', (blog_url, twitter_handle, today))
+        
+        today_posted_ids = [row[0] for row in cursor.fetchall()]
+        posted_ids = list(set(posted_ids + today_posted_ids))  # 重複を除去して結合
+        
         # 未投稿の投稿を取得
         if posted_ids:
             placeholders = ','.join('?' * len(posted_ids))
