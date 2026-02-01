@@ -381,16 +381,18 @@ class PostDatabase:
 
         # Day001～Day365の投稿のみをフィルタリング（365botGaryの場合）
         if filter_day_only and 'notesofacim.blog.fc2.com' in blog_url:
-            # Day001～Day365のパターンに一致する投稿のみを選択
+            # Day001～Day365のパターンに一致する投稿のみを選択（重複を除外）
             day_pattern = re.compile(r'Day(\d{3})')
             filtered_posts = []
+            seen_days = set()
             for post in unposted_posts:
                 title = post.get('title', '')
                 match = day_pattern.search(title)
                 if match:
                     day_num = int(match.group(1))
-                    if 1 <= day_num <= 365:
+                    if 1 <= day_num <= 365 and day_num not in seen_days:
                         filtered_posts.append(post)
+                        seen_days.add(day_num)
             
             if filtered_posts:
                 unposted_posts = filtered_posts
@@ -399,12 +401,12 @@ class PostDatabase:
                 return None
         
         # 「語録」を含む投稿のみをフィルタリング（pursahsgospelの場合）
-        # ※『原書などの情報』は除外
+        # ※『原書』と『索引』は除外
         if ('pursahs-gospel' in blog_url) or (twitter_handle.lower() == 'pursahsgospel'):
             filtered_posts = []
             for post in unposted_posts:
-                title = post.get('title', '')
-                if '語録' in title and '原書' not in title:
+                title = post.get('title', '') or ''
+                if '語録' in title and '原書' not in title and '索引' not in title:
                     filtered_posts.append(post)
             
             if filtered_posts:

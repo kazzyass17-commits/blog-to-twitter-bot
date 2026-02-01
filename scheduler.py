@@ -67,19 +67,19 @@ def run_retry_task():
 
 
 def schedule_daily_posts():
-    """1日3回（9時、12時、15時 JST）のランダム投稿をスケジュール"""
+    """1日3回（8時、12時、16時 JST）のランダム投稿をスケジュール"""
     # 各時間帯でランダムな分を生成（0-59分の間でランダム）
     post_times = [
-        (9, random.randint(0, 59)),   # 9時00分～9時59分
+        (8, random.randint(0, 59)),   # 8時00分～8時59分
         (12, random.randint(0, 59)),  # 12時00分～12時59分
-        (15, random.randint(0, 59)),  # 15時00分～15時59分
+        (16, random.randint(0, 59)),  # 16時00分～16時59分
     ]
     
-    # リトライスケジュール（10時、13時、16時 固定）
+    # リトライスケジュール（9時、13時、17時）
     retry_times = [
-        (10, random.randint(0, 59)),  # 10時00分～10時59分
+        (9, random.randint(0, 59)),   # 9時00分～9時59分
         (13, random.randint(0, 59)),  # 13時00分～13時59分
-        (16, random.randint(0, 59)),  # 16時00分～16時59分
+        (17, random.randint(0, 59)),  # 17時00分～17時59分
     ]
 
     created_jobs = []
@@ -181,7 +181,7 @@ def check_lock_file():
                 if psutil.pid_exists(lock_pid):
                     proc = psutil.Process(lock_pid)
                     cmdline = proc.cmdline()
-                    if any('schedule.py' in str(arg) for arg in cmdline):
+                    if any('scheduler.py' in str(arg) for arg in cmdline):
                         logger.error(f"既存のschedule.pyプロセスが実行中です（PID: {lock_pid}）")
                         logger.error("重複実行を防ぐため、このプロセスを終了します。")
                         return True

@@ -220,15 +220,27 @@ def post_blog_post_to_account(
         def on_success(res):
             clear_rate_limit_state(account_key)
             remove_failed_post(post_data['id'], account_key)
-            db = PostDatabase()
-            cycle_number = db.get_current_cycle_number(blog_url, twitter_handle)
-            db.record_post(
-                post_id=post_data['id'],
-                blog_url=blog_url,
-                twitter_handle=twitter_handle,
-                cycle_number=cycle_number,
-                tweet_id=str(res.get('id', ''))
-            )
+            db = None
+            cycle_number = None
+            try:
+                db = PostDatabase()
+                cycle_number = db.get_current_cycle_number(blog_url, twitter_handle)
+                success = db.record_post(
+                    post_id=post_data['id'],
+                    blog_url=blog_url,
+                    twitter_handle=twitter_handle,
+                    cycle_number=cycle_number,
+                    tweet_id=str(res.get('id', ''))
+                )
+                if not success:
+                    logger.error(f"投稿履歴の記録に失敗しました: post_id={post_data['id']}, @{twitter_handle}")
+            except Exception as e:
+                logger.error(f"投稿履歴の記録中にエラーが発生しました: {e}", exc_info=True)
+                # エラーが発生しても続行するため、dbとcycle_numberを再取得
+                if db is None:
+                    db = PostDatabase()
+                if cycle_number is None:
+                    cycle_number = db.get_current_cycle_number(blog_url, twitter_handle)
             logger.info(f"✓ 投稿成功: @{twitter_handle}")
             logger.info(f"  ツイートID: {res.get('id')}")
             logger.info(f"  サイクル番号: {cycle_number}")
@@ -237,8 +249,9 @@ def post_blog_post_to_account(
                 remain_app = headers_s.get("x-app-limit-24hour-remaining")
                 remain_user = headers_s.get("x-user-limit-24hour-remaining")
                 logger.info(f"  24h残数 app/user: {remain_app}/{remain_user} (headers={headers_s})")
-            if db.check_cycle_complete(blog_url, twitter_handle, cycle_number):
-                logger.info(f"  サイクル#{cycle_number}が完了しました。次のサイクルが開始されます。")
+            if db and cycle_number is not None:
+                if db.check_cycle_complete(blog_url, twitter_handle, cycle_number):
+                    logger.info(f"  サイクル#{cycle_number}が完了しました。次のサイクルが開始されます。")
             return True, None
 
         def record_failure(res, preview_text):
@@ -266,22 +279,69 @@ def post_blog_post_to_account(
             if goroku_match:
                 goroku = goroku_match.group(1)
                 rest = goroku_match.group(2).lstrip()
-                m2 = re.match(r"\s*([^\s]+)\s+(.*)", rest)
-                if m2:
-                    trimmed_rest = m2.group(2)
+                # 最初の単語を削除（英語・日本語両対応）
+                # パターン1: 「Ｊは言った。」のような場合、「Ｊは」だけを削除
+                # パターン2: 「J said,」のような場合、「J」だけを削除
+                # パターン3: 「said,」のような場合、「said,」を削除
+                
+                # まず「Ｊは」または「Jは」のパターンをチェック（空白がない場合も対応）
+                if rest.startswith('Ｊは') or rest.startswith('Jは'):
+                    # 「Ｊは」または「Jは」を削除
+                    trimmed_rest = rest[2:].lstrip()
+                    first_word = rest[:2]
+                    logger.warning(f"403エラー: 削除された最初の単語: '{first_word}'")
                 else:
-                    trimmed_rest = rest[2:] if len(rest) > 2 else ""
+                    # 空白で区切られる単語を探す
+                    m2 = re.match(r"\s*([^\s]+)\s+(.*)", rest)
+                    if m2:
+                        first_word = m2.group(1)
+                        trimmed_rest = m2.group(2)
+                        # 1文字の英語の場合は、そのまま削除（「J」->「said,」）
+                        if len(first_word) == 1 and first_word.isalpha() and trimmed_rest:
+                            pass
+                        logger.warning(f"403エラー: 削除された最初の単語: '{first_word}'")
+                    else:
+                        # 空白がない場合、最初の文字列を削除
+                        # 「said,」のような場合は、句読点までを含めて1単語として扱う
+                        m3 = re.match(r'^([A-Za-z]+[、，,。.]?|[^\s、，,。.]+[、，,。.]?|.)', rest)
+                        if m3:
+                            first_word = m3.group(1)
+                            trimmed_rest = rest[len(first_word):]
+                            logger.warning(f"403エラー: 削除された最初の単語（空白なし）: '{first_word}'")
+                        else:
+                            # それでもマッチしない場合、最初の2文字を削除（フォールバック）
+                            trimmed_rest = rest[2:] if len(rest) > 2 else ""
+                            logger.warning(f"403エラー: パターンマッチなし、最初の2文字を削除")
                 trimmed_rest = trimmed_rest.lstrip()
                 if trimmed_rest:
                     if not trimmed_rest.startswith("…"):
                         trimmed_rest = f"…{trimmed_rest}"
                     return f"{goroku}\n{trimmed_rest}"
                 return goroku
-            m = re.match(r"\s*([^\s]+)\s+(.*)", body)
-            if m:
-                trimmed = m.group(2)
+            # 語録番号がない場合
+            # まず「Ｊは」または「Jは」のパターンをチェック
+            if body.startswith('Ｊは') or body.startswith('Jは'):
+                # 「Ｊは」または「Jは」を削除
+                trimmed = body[2:].lstrip()
+                first_word = body[:2]
+                logger.warning(f"403エラー: 削除された最初の単語: '{first_word}'")
             else:
-                trimmed = body[2:] if len(body) > 2 else ""
+                # 空白で区切られる単語を探す
+                m = re.match(r"\s*([^\s]+)\s+(.*)", body)
+                if m:
+                    first_word = m.group(1)
+                    trimmed = m.group(2)
+                    logger.warning(f"403エラー: 削除された最初の単語: '{first_word}'")
+                else:
+                    # 空白がない場合、最初の文字列を削除
+                    m3 = re.match(r'^([A-Za-z]+[、，,。.]?|[^\s、，,。.]+[、，,。.]?|.)', body)
+                    if m3:
+                        first_word = m3.group(1)
+                        trimmed = body[len(first_word):]
+                        logger.warning(f"403エラー: 削除された最初の単語（空白なし）: '{first_word}'")
+                    else:
+                        trimmed = body[2:] if len(body) > 2 else ""
+                        logger.warning(f"403エラー: パターンマッチなし、最初の2文字を削除")
             trimmed = trimmed.lstrip()
             return ("…" if not has_leading_ellipsis else "…") + trimmed if trimmed else ("…" if not has_leading_ellipsis else body)
 
