@@ -301,17 +301,18 @@ def post_blog_post_to_account(
                             pass
                         logger.warning(f"403エラー: 削除された最初の単語: '{first_word}'")
                     else:
-                        # 空白がない場合、最初の文字列を削除
-                        # 「said,」のような場合は、句読点までを含めて1単語として扱う
-                        m3 = re.match(r'^([A-Za-z]+[、，,。.]?|[^\s、，,。.]+[、，,。.]?|.)', rest)
+                        # 空白がない場合、1単語を削除
+                        # 英語: 英単語1つ / 日本語: 助詞(は、が、の等)や句読点までの短い単位(最大5文字)
+                        m3 = re.match(r'^([A-Za-z]+[、，,。.]?|.{1,5}?[はがのをにで、，,。.「」]|.{1,3})', rest)
                         if m3:
                             first_word = m3.group(1)
                             trimmed_rest = rest[len(first_word):]
-                            logger.warning(f"403エラー: 削除された最初の単語（空白なし）: '{first_word}'")
+                            logger.warning(f"403エラー: 削除された最初の単語: '{first_word}'")
                         else:
-                            # それでもマッチしない場合、最初の2文字を削除（フォールバック）
-                            trimmed_rest = rest[2:] if len(rest) > 2 else ""
-                            logger.warning(f"403エラー: パターンマッチなし、最初の2文字を削除")
+                            # フォールバック: 最初の3文字を削除
+                            first_word = rest[:3] if len(rest) >= 3 else rest
+                            trimmed_rest = rest[len(first_word):]
+                            logger.warning(f"403エラー: フォールバック削除: '{first_word}'")
                 trimmed_rest = trimmed_rest.lstrip()
                 if trimmed_rest:
                     if not trimmed_rest.startswith("…"):
@@ -333,15 +334,18 @@ def post_blog_post_to_account(
                     trimmed = m.group(2)
                     logger.warning(f"403エラー: 削除された最初の単語: '{first_word}'")
                 else:
-                    # 空白がない場合、最初の文字列を削除
-                    m3 = re.match(r'^([A-Za-z]+[、，,。.]?|[^\s、，,。.]+[、，,。.]?|.)', body)
+                    # 空白がない場合、1単語を削除
+                    # 英語: 英単語1つ / 日本語: 助詞(は、が、の等)や句読点までの短い単位(最大5文字)
+                    m3 = re.match(r'^([A-Za-z]+[、，,。.]?|.{1,5}?[はがのをにで、，,。.「」]|.{1,3})', body)
                     if m3:
                         first_word = m3.group(1)
                         trimmed = body[len(first_word):]
-                        logger.warning(f"403エラー: 削除された最初の単語（空白なし）: '{first_word}'")
+                        logger.warning(f"403エラー: 削除された最初の単語: '{first_word}'")
                     else:
-                        trimmed = body[2:] if len(body) > 2 else ""
-                        logger.warning(f"403エラー: パターンマッチなし、最初の2文字を削除")
+                        # フォールバック: 最初の3文字を削除
+                        first_word = body[:3] if len(body) >= 3 else body
+                        trimmed = body[len(first_word):]
+                        logger.warning(f"403エラー: フォールバック削除: '{first_word}'")
             trimmed = trimmed.lstrip()
             return ("…" if not has_leading_ellipsis else "…") + trimmed if trimmed else ("…" if not has_leading_ellipsis else body)
 
