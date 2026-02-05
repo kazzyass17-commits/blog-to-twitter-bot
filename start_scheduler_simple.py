@@ -1,4 +1,6 @@
-"""シンプルなスケジューラー起動スクリプト"""
+"""シンプルなスケジューラー起動スクリプト
+各アカウント独立、毎日ランダムな時刻（0〜30分）に投稿
+"""
 import os
 import sys
 import time
@@ -6,6 +8,7 @@ import schedule
 import logging
 from datetime import datetime
 import random
+import subprocess
 
 # ログ設定
 logging.basicConfig(
@@ -59,13 +62,13 @@ with open(PID_FILE, 'w') as f:
     f.write(str(os.getpid()))
 logger.info(f"スケジューラー起動 (PID: {os.getpid()})")
 
-def run_post():
-    """投稿を実行"""
-    import subprocess
-    logger.info("投稿実行開始...")
+
+def run_post(account: str):
+    """指定アカウントの投稿を実行"""
+    logger.info(f"投稿実行開始: {account}")
     try:
         result = subprocess.run(
-            [sys.executable, 'post_both_accounts.py'],
+            [sys.executable, 'post_both_accounts.py', '--account', account],
             capture_output=True,
             text=True,
             encoding='utf-8',
@@ -73,24 +76,43 @@ def run_post():
             timeout=300
         )
         if result.returncode == 0:
-            logger.info("投稿成功")
+            logger.info(f"投稿成功: {account}")
         else:
-            logger.error(f"投稿失敗: {result.stderr[:500]}")
+            logger.error(f"投稿失敗 ({account}): {result.stderr[:500]}")
     except Exception as e:
-        logger.error(f"投稿エラー: {e}")
+        logger.error(f"投稿エラー ({account}): {e}")
+
+
+def run_post_and_reschedule(account: str, hour: int):
+    """投稿実行後、翌日の時刻を再設定"""
+    run_post(account)
+    
+    # 次回の時刻を再設定
+    tag = f'{account}_{hour}'
+    schedule.clear(tag)
+    new_minute = random.randint(0, 30)
+    schedule.every().day.at(f"{hour:02d}:{new_minute:02d}").do(
+        run_post_and_reschedule, account=account, hour=hour
+    ).tag(tag)
+    logger.info(f"次回スケジュール再設定: {account} -> {hour:02d}:{new_minute:02d}")
+
 
 # スケジュール設定（8時、12時、16時）
-post_times = [
-    (8, random.randint(0, 59)),
-    (12, random.randint(0, 59)),
-    (16, random.randint(0, 59)),
-]
+# 各アカウント独立、0〜30分のランダム
+POST_HOURS = [8, 12, 16]
+ACCOUNTS = ['pursahs', '365bot']
 
-for hour, minute in post_times:
-    schedule.every().day.at(f"{hour:02d}:{minute:02d}").do(run_post)
-    logger.info(f"スケジュール登録: {hour:02d}:{minute:02d}")
+for account in ACCOUNTS:
+    for hour in POST_HOURS:
+        minute = random.randint(0, 30)
+        tag = f'{account}_{hour}'
+        schedule.every().day.at(f"{hour:02d}:{minute:02d}").do(
+            run_post_and_reschedule, account=account, hour=hour
+        ).tag(tag)
+        logger.info(f"スケジュール登録: {account} -> {hour:02d}:{minute:02d}")
 
 logger.info("スケジューラー開始。Ctrl+Cで終了。")
+logger.info(f"登録ジョブ数: {len(schedule.get_jobs())}")
 
 # メインループ
 try:

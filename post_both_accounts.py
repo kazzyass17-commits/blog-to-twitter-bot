@@ -691,9 +691,17 @@ if __name__ == "__main__":
     try:
         import argparse
         parser = argparse.ArgumentParser(description='両アカウント or 単独投稿の実行')
-        parser.add_argument('--only-pursahs', action='store_true', help='pursahsgospelのみ投稿')
+        parser.add_argument('--only-pursahs', action='store_true', help='pursahsgospelのみ投稿（非推奨、--accountを使用）')
+        parser.add_argument('--account', choices=['pursahs', '365bot'], help='指定アカウントのみ投稿')
         args = parser.parse_args()
-        main("pursahs" if args.only_pursahs else None)
+        
+        # --account が指定されていればそちらを優先
+        if args.account:
+            main(args.account)
+        elif args.only_pursahs:
+            main("pursahs")
+        else:
+            main(None)
     finally:
         # ログを確実に書き込む
         import logging
